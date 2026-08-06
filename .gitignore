@@ -1,0 +1,48 @@
+# --- TEMPORÁRIOS DA UNITY E IDEs (NÃO SUBIR) ---
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+.utmp/
+.vscode/
+
+# Arquivos de solução do Visual Studio / Rider
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.idb
+*.log
+
+# --- EXCEÇÃO PARA AS SUAS PASTAS DE CÓDIGO ---
+# Ignora tudo em Assets por padrão, exceto _scripts e Plugins
+Assets/*
+!Assets/_scripts/
+!Assets/Plugins/
+!Assets/_scripts/**
+!Assets/Plugins/**
+
+# Libera os arquivos .meta necessários
+!Assets/_scripts.meta
+!Assets/Plugins.meta
+!Assets/_scripts/**.meta
+!Assets/Plugins/**.meta
+
+# Mantém o README e o manifesto de pacotes da Unity
+!README.md
+!Packages/
+!ProjectSettings/
