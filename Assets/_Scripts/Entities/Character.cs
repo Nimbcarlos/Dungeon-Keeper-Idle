@@ -1,7 +1,5 @@
 using UnityEngine;
 
-
-
 public abstract class Character : Entity
 {
     public Stats Stats { get; private set; }
@@ -10,6 +8,10 @@ public abstract class Character : Entity
     [SerializeField] private Transform _feetPoint;
     [SerializeField] private Transform _combatPoint;
     [SerializeField] private Transform _headPoint;
+    
+    [Header("UI Prefabs")]
+    [SerializeField] private GameObject _healthBarPrefab;
+    private HealthBar _healthBar;
 
     public Transform FeetPoint   => _feetPoint   != null ? _feetPoint   : transform;
     public Transform CombatPoint => _combatPoint  != null ? _combatPoint  : transform;
@@ -19,6 +21,14 @@ public abstract class Character : Entity
     {
         Stats = sourceStats.Clone();
         Health.Initialize(Stats);
+        
+        if (_healthBarPrefab != null)
+        {
+            GameObject bar = Instantiate(_healthBarPrefab, transform.position, Quaternion.identity);
+            _healthBar = bar.GetComponent<HealthBar>();
+            _healthBar.Initialize(transform);
+            _healthBar.UpdateHealth(Health.MaxHP);
+        }
     }
 
     public virtual void Attack(IDamageable target)
@@ -37,6 +47,12 @@ public abstract class Character : Entity
     {
         Health.TakeDamage(amount);
         OnHit();
+
+        DamageTextManager.Instance?.SpawnDamageText(HeadPoint.position, amount);
+
+        // Use a propriedade Percent direto da sua classe Health!
+        _healthBar?.UpdateHealth(Health.Percent);
+        Debug.Log($"HealthBar updated. Current health percent: {Health.Percent}");
     }
 
     public bool InRange(ITargetable target)
@@ -55,7 +71,26 @@ public abstract class Character : Entity
         Destroy(gameObject, 0.1f);
     }
 
-    protected virtual void OnDieEffect() { }
-    protected virtual void OnAttack()    { }
-    protected virtual void OnHit()       { }
+    protected virtual void OnDieEffect()
+    {
+        CleanupHealthBar();
+    }
+
+    // Limpeza de memória garantida para a Barra de HP
+    private void CleanupHealthBar()
+    {
+        if (_healthBar != null)
+        {
+            Destroy(_healthBar.gameObject);
+            _healthBar = null;
+        }
+    }
+
+    protected virtual void OnDestroy()
+    {
+        CleanupHealthBar();
+    }
+
+    protected virtual void OnAttack()   { }
+    protected virtual void OnHit()      { }
 }
