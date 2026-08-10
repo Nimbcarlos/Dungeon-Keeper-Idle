@@ -15,13 +15,13 @@ MonoBehaviour:
   id: 1
   displayName: Green Slime
   icon: {fileID: 7104940694295053069, guid: 79c4277df3f22b64dba9076b40c86d12, type: 3}
-  prefab: {fileID: 6683174701663779205, guid: d8a8839747b1b8046b6dfb8a2f3e390e, type: 3}
+  prefab: {fileID: 1540198457067633143, guid: 59e4026964406244b9f55f1393193ba6, type: 3}
   stats:
     maxHP: 100
     attackPower: 15
     attackSpeed: 2
-    detectionRange: 4
-    attackRange: 1.5
+    detectionRange: 10
+    attackRange: 2
     moveSpeed: 2
   goldReward: 5
   essenceReward: 1

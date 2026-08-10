@@ -1,54 +1,58 @@
 using UnityEngine;
 using TMPro;
 
-public class HUDController : MonoBehaviour
+
+namespace DungeonKeeper
 {
-    [Header("Resources")]
-    [SerializeField] private TextMeshProUGUI _goldText;
-    [SerializeField] private TextMeshProUGUI _essenceText;
-    [SerializeField] private UnityEngine.UI.Button _pipButton;
-
-    void Start()
+    public class HUDController : MonoBehaviour
     {
-        // inscreve nos eventos
-        ResourceManager.Instance.OnGoldChanged    += UpdateGold;
-        ResourceManager.Instance.OnEssenceChanged += UpdateEssence;
+        [Header("Resources")]
+        [SerializeField] private TextMeshProUGUI _goldText;
+        [SerializeField] private TextMeshProUGUI _essenceText;
+        [SerializeField] private UnityEngine.UI.Button _pipButton;
 
-        // inicializa com valores atuais
-        UpdateGold(ResourceManager.Instance.Gold);
-        UpdateEssence(ResourceManager.Instance.Essence);
+        void Start()
+        {
+            // inscreve nos eventos
+            ResourceManager.Instance.OnGoldChanged    += UpdateGold;
+            ResourceManager.Instance.OnEssenceChanged += UpdateEssence;
 
-        // configura botão PiP
-        if (_pipButton != null)
-            _pipButton.onClick.AddListener(OnPiPButtonClicked);
+            // inicializa com valores atuais
+            UpdateGold(ResourceManager.Instance.Gold);
+            UpdateEssence(ResourceManager.Instance.Essence);
 
-        // esconde o botão no editor — só faz sentido no Android
-        #if UNITY_EDITOR
-        if (_pipButton != null)
-            _pipButton.gameObject.SetActive(false);
-        #endif
-    }
+            // configura botão PiP
+            if (_pipButton != null)
+                _pipButton.onClick.AddListener(OnPiPButtonClicked);
 
-    void OnDestroy()
-    {
-        if (ResourceManager.Instance == null) return;
-        ResourceManager.Instance.OnGoldChanged    -= UpdateGold;
-        ResourceManager.Instance.OnEssenceChanged -= UpdateEssence;
-    }
+            // esconde o botão no editor — só faz sentido no Android
+            #if UNITY_EDITOR
+            if (_pipButton != null)
+                _pipButton.gameObject.SetActive(false);
+            #endif
+        }
 
-    void UpdateGold(int total)
-    {
-        _goldText.text = $"{total}";
-    }
+        void OnDestroy()
+        {
+            if (ResourceManager.Instance == null) return;
+            ResourceManager.Instance.OnGoldChanged    -= UpdateGold;
+            ResourceManager.Instance.OnEssenceChanged -= UpdateEssence;
+        }
 
-    void UpdateEssence(int total)
-    {
-        _essenceText.text = $"{total}";
-    }
+        void UpdateGold(int total)
+        {
+            _goldText.text = $"{total}";
+        }
 
-    void OnPiPButtonClicked()
-    {
-        AndroidPiP pip = FindAnyObjectByType<AndroidPiP>();
-        if (pip != null) pip.EnterPiP();
+        void UpdateEssence(int total)
+        {
+            _essenceText.text = $"{total}";
+        }
+
+        void OnPiPButtonClicked()
+        {
+            AndroidPiP pip = FindAnyObjectByType<AndroidPiP>();
+            if (pip != null) pip.EnterPiP();
+        }
     }
 }

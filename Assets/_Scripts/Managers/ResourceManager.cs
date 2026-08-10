@@ -1,57 +1,61 @@
 using UnityEngine;
 using System;
 
-public class ResourceManager : MonoBehaviour
+
+namespace DungeonKeeper
 {
-    public static ResourceManager Instance { get; private set; }
-
-    public int Gold    { get; private set; }
-    public int Essence { get; private set; }
-
-    public event Action<int> OnGoldChanged;
-    public event Action<int> OnEssenceChanged;
-
-    void Awake()
+    public class ResourceManager : MonoBehaviour
     {
-        if (Instance != null) { Destroy(gameObject); return; }
-        Instance = this;
-    }
+        public static ResourceManager Instance { get; private set; }
 
-    public bool CanAffordGold(int amount)    => Gold >= amount;
-    public bool CanAffordEssence(int amount) => Essence >= amount;
+        public int Gold    { get; private set; }
+        public int Essence { get; private set; }
 
-    public void SetGold(int amount)
-    {
-        Gold = amount;
-        OnGoldChanged?.Invoke(Gold);
-    }
+        public event Action<int> OnGoldChanged;
+        public event Action<int> OnEssenceChanged;
 
-    public void AddGold(int amount)
-    {
-        Gold += amount;
-        OnGoldChanged?.Invoke(Gold);
-    }
+        void Awake()
+        {
+            if (Instance != null) { Destroy(gameObject); return; }
+            Instance = this;
+        }
 
-    public bool SpendGold(int amount)
-    {
-        if (!CanAffordGold(amount)) return false;
-        Gold -= amount;
-        OnGoldChanged?.Invoke(Gold);
-        return true;
-    }
+        public bool CanAffordGold(int amount)    => Gold >= amount;
+        public bool CanAffordEssence(int amount) => Essence >= amount;
 
-    public void AddEssence(int amount)
-    {
-        Essence += amount;
-        OnEssenceChanged?.Invoke(Essence);
-        Debug.Log($"Essência: +{amount} (total: {Essence})");
-    }
+        public void SetGold(int amount)
+        {
+            Gold = amount;
+            OnGoldChanged?.Invoke(Gold);
+        }
 
-    public bool SpendEssence(int amount)
-    {
-        if (!CanAffordEssence(amount)) return false;
-        Essence -= amount;
-        OnEssenceChanged?.Invoke(Essence);
-        return true;
+        public void AddGold(int amount)
+        {
+            Gold += amount;
+            OnGoldChanged?.Invoke(Gold);
+        }
+
+        public bool SpendGold(int amount)
+        {
+            if (!CanAffordGold(amount)) return false;
+            Gold -= amount;
+            OnGoldChanged?.Invoke(Gold);
+            return true;
+        }
+
+        public void AddEssence(int amount)
+        {
+            Essence += amount;
+            OnEssenceChanged?.Invoke(Essence);
+            Debug.Log($"Essência: +{amount} (total: {Essence})");
+        }
+
+        public bool SpendEssence(int amount)
+        {
+            if (!CanAffordEssence(amount)) return false;
+            Essence -= amount;
+            OnEssenceChanged?.Invoke(Essence);
+            return true;
+        }
     }
 }

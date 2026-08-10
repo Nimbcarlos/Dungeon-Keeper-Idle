@@ -1,20 +1,23 @@
 using UnityEngine;
 
-[RequireComponent(typeof(Character))]
-public abstract class CharacterBrain : MonoBehaviour
+namespace DungeonKeeper
 {
-    protected Character character;
-
-    protected virtual void Awake()
+    [RequireComponent(typeof(Character))]
+    public abstract class CharacterBrain : MonoBehaviour
     {
-        character = GetComponent<Character>();
-    }
+        protected Character character;
 
-    protected virtual void Update()
-    {
-        if (character == null || !character.IsAlive) return;
-        Think();
-    }
+        protected virtual void Awake()
+        {
+            character = GetComponent<Character>();
+        }
 
-    protected abstract void Think();
+        protected virtual void Update()
+        {
+            if (character == null || !character.IsAlive) return;
+            Think();
+        }
+
+        protected abstract void Think();
+    }
 }

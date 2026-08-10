@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using DungeonKeeper;
 
 [CreateAssetMenu(fileName = "HeroRoster", menuName = "Dungeon/Hero Roster")]
 public class HeroRoster : ScriptableObject

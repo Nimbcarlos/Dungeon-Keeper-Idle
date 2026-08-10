@@ -1,4 +1,5 @@
 using UnityEngine;
+using DungeonKeeper;
 
 [CreateAssetMenu(fileName = "PartyConfig", menuName = "Dungeon/Party Config")]
 public class PartyConfig : ScriptableObject

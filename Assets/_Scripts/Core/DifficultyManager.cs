@@ -1,42 +1,47 @@
 using UnityEngine;
 
-public class DifficultyManager : MonoBehaviour
+
+
+namespace DungeonKeeper
 {
-    public static DifficultyManager Instance { get; private set; }
-
-    [SerializeField] private Treasure _treasure;
-
-    // thresholds de Gold → nível de ameaça
-    [SerializeField] private int[] _goldThresholds = { 0, 50, 150, 300, 500 };
-
-    public int CurrentDifficulty { get; private set; } = 1;
-
-    void Awake()
+    public class DifficultyManager : MonoBehaviour
     {
-        if (Instance != null) { Destroy(gameObject); return; }
-        Instance = this;
-    }
+        public static DifficultyManager Instance { get; private set; }
 
-    void Update()
-    {
-        if (_treasure == null) return;
+        [SerializeField] private Treasure _treasure;
 
-        int gold = _treasure.Gold;
-        int newDifficulty = 1;
+        // thresholds de Gold → nível de ameaça
+        [SerializeField] private int[] _goldThresholds = { 0, 50, 150, 300, 500 };
 
-        for (int i = _goldThresholds.Length - 1; i >= 0; i--)
+        public int CurrentDifficulty { get; private set; } = 1;
+
+        void Awake()
         {
-            if (gold >= _goldThresholds[i])
-            {
-                newDifficulty = i + 1;
-                break;
-            }
+            if (Instance != null) { Destroy(gameObject); return; }
+            Instance = this;
         }
 
-        if (newDifficulty != CurrentDifficulty)
+        void Update()
         {
-            CurrentDifficulty = newDifficulty;
-            Debug.Log($"Dificuldade: {CurrentDifficulty} (Gold: {gold})");
+            if (_treasure == null) return;
+
+            int gold = _treasure.Gold;
+            int newDifficulty = 1;
+
+            for (int i = _goldThresholds.Length - 1; i >= 0; i--)
+            {
+                if (gold >= _goldThresholds[i])
+                {
+                    newDifficulty = i + 1;
+                    break;
+                }
+            }
+
+            if (newDifficulty != CurrentDifficulty)
+            {
+                CurrentDifficulty = newDifficulty;
+                Debug.Log($"Dificuldade: {CurrentDifficulty} (Gold: {gold})");
+            }
         }
     }
 }

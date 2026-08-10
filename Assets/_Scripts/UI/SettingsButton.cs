@@ -1,10 +1,13 @@
 using UnityEngine;
 
-public class SettingsButton : MonoBehaviour
+namespace DungeonKeeper
 {
-    public void OnClick()
+    public class SettingsButton : MonoBehaviour
     {
-        // TODO: abrir painel de configurações
-        Debug.Log("Settings aberto");
+        public void OnClick()
+        {
+            // TODO: abrir painel de configurações
+            Debug.Log("Settings aberto");
+        }
     }
 }

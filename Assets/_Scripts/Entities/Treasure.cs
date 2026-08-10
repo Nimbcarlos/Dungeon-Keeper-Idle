@@ -1,58 +1,61 @@
 using UnityEngine;
 using System;
 
-public class Treasure : MonoBehaviour
+namespace DungeonKeeper
 {
-    [Header("Gold")]
-    [SerializeField] private int   _startingGold    = 100;
-    [SerializeField] private int   _minGold         = 10;  // nunca zera
-    [SerializeField] private float _regenRate       = 1f;  // gold por segundo
-    [SerializeField] private int   _regenAmount     = 1;
-
-    public int  Gold        { get; private set; }
-    public bool IsEmpty     => Gold <= _minGold;
-
-    public event Action<int> OnGoldChanged;
-    public event Action      OnTreasureSacked; // herói saqueou
-
-    private float _regenTimer;
-
-    void Start()
+    public class Treasure : MonoBehaviour
     {
-        Gold = _startingGold;
-        ResourceManager.Instance.SetGold(Gold);
-    }
+        [Header("Gold")]
+        [SerializeField] private int   _startingGold    = 100;
+        [SerializeField] private int   _minGold         = 10;  // nunca zera
+        [SerializeField] private float _regenRate       = 1f;  // gold por segundo
+        [SerializeField] private int   _regenAmount     = 1;
 
-    void Update()
-    {
-        // regenera passivamente
-        _regenTimer += Time.deltaTime;
-        if (_regenTimer >= _regenRate)
+        public int  Gold        { get; private set; }
+        public bool IsEmpty     => Gold <= _minGold;
+
+        public event Action<int> OnGoldChanged;
+        public event Action      OnTreasureSacked; // herói saqueou
+
+        private float _regenTimer;
+
+        void Start()
         {
-            _regenTimer = 0f;
-            AddGold(_regenAmount);
+            Gold = _startingGold;
+            ResourceManager.Instance.SetGold(Gold);
         }
-    }
 
-    public void AddGold(int amount)
-    {
-        Gold += amount;
-        ResourceManager.Instance.SetGold(Gold);
-        OnGoldChanged?.Invoke(Gold);
-        if (Gold % 10 == 0)
+        void Update()
         {
-            Debug.Log($"Tesouro: +{amount} Gold (total: {Gold})");
+            // regenera passivamente
+            _regenTimer += Time.deltaTime;
+            if (_regenTimer >= _regenRate)
+            {
+                _regenTimer = 0f;
+                AddGold(_regenAmount);
+            }
         }
-    }
 
-    // herói chegou e saqueou
-    public void Sack(int amount)
-    {
-        Debug.Log($"Sack chamado — disparando OnTreasureSacked");
-        Gold = Mathf.Max(_minGold, Gold - amount);
-        ResourceManager.Instance.SetGold(Gold);
-        OnGoldChanged?.Invoke(Gold);
-        OnTreasureSacked?.Invoke();
-        Debug.Log($"Tesouro saqueado: -{amount} Gold (total: {Gold})");
+        public void AddGold(int amount)
+        {
+            Gold += amount;
+            ResourceManager.Instance.SetGold(Gold);
+            OnGoldChanged?.Invoke(Gold);
+            if (Gold % 10 == 0)
+            {
+                Debug.Log($"Tesouro: +{amount} Gold (total: {Gold})");
+            }
+        }
+
+        // herói chegou e saqueou
+        public void Sack(int amount)
+        {
+            Debug.Log($"Sack chamado — disparando OnTreasureSacked");
+            Gold = Mathf.Max(_minGold, Gold - amount);
+            ResourceManager.Instance.SetGold(Gold);
+            OnGoldChanged?.Invoke(Gold);
+            OnTreasureSacked?.Invoke();
+            Debug.Log($"Tesouro saqueado: -{amount} Gold (total: {Gold})");
+        }
     }
 }

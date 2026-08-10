@@ -1,4 +1,5 @@
 using UnityEngine;
+using DungeonKeeper;
 
 public enum DamageType
 {

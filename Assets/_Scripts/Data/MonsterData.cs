@@ -1,4 +1,5 @@
 using UnityEngine;
+using DungeonKeeper;
 
 [CreateAssetMenu(fileName = "MonsterData", menuName = "Dungeon/Monster Data")]
 public class MonsterData : ScriptableObject

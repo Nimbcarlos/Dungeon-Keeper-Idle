@@ -1,54 +1,110 @@
 using UnityEngine;
+using System.Collections; // <-- ADICIONE ESTA LINHA SE NÃO ESTIVER LÁ
 
-public class Hero : Character
+namespace DungeonKeeper
 {
-    public HeroData Data { get; private set; }
-
-    private static readonly int IsMoving    = Animator.StringToHash("isMoving");
-    private static readonly int IsAttacking = Animator.StringToHash("isAttacking");
-    private static readonly int IsHurt      = Animator.StringToHash("isHurt");
-    private static readonly int IsDead      = Animator.StringToHash("isDead");
-
-    public bool HasSacked { get; set; }
-
-    public void Initialize(HeroData heroData)
+    public class Hero : Character
     {
-        Data = heroData;
-        base.Initialize(heroData.stats);
-    }
+        public HeroData Data { get; private set; }
 
-    protected override void OnAttack()
-    {
-        if (Animator == null) return;
-        Animator.SetBool(IsMoving,    false);
-        Animator.SetBool(IsAttacking, true);
-    }
+        // Mapeamos a Hash do parâmetro "State" (Integer) do Animator do Hero Editor
+        private static readonly int StateHash = Animator.StringToHash("State");
+        private static readonly int Victory = Animator.StringToHash("Victory");
 
-    protected override void OnHit()
-    {
-        // if (Animator == null) return;
-        // Animator.SetBool(IsHurt, true);
-    }
+        // Enum opcional para deixar o código bem legível e organizado
+        private enum CharacterState
+        {
+            Stand = 0,
+            Walk = 1,
+            Run = 2,
+            Jump = 3,
+            Crouch = 4,
+            Climb = 5,
+            DeathBack = 6
+        }
 
-    protected override void OnDieEffect()
-    {
-        if (Data == null) return;
+        public bool HasSacked { get; set; }
 
-        // ouro vai pro baú
-        Treasure treasure = FindAnyObjectByType<Treasure>();
-        if (treasure != null) treasure.AddGold(Data.goldReward);
+        public void Initialize(HeroData heroData)
+        {
+            Data = heroData;
+            base.Initialize(heroData.stats);
+        }
 
-        // essência vai pro jogador
-        ResourceManager.Instance.AddEssence(Data.essenceReward);
+        /// <summary>
+        /// Define a animação pelo número do estado do Hero Editor
+        /// </summary>
+        public void SetState(int stateValue)
+        {
+            if (Animator == null) return;
+            Animator.SetInteger(StateHash, stateValue);
+        }
 
-        Debug.Log($"Herói derrotado: +{Data.goldReward} Gold no baú, +{Data.essenceReward} Essência");
-        if (Animator == null) return;
-        Animator.SetBool(IsDead, true);
+        protected override void OnAttack()
+        {
+            if (Animator == null) return;
+            
+            // Quando ataca, se houver um estado de ataque no Animator ou Trigger:
+            // Por exemplo, podemos resetar o estado de corrida para Stand/Attack:
+            SetState((int)CharacterState.Stand);
+        }
 
-    }
-    public new void Die()
-    {
-        // OnDieEffect();
-        Destroy(gameObject, 0.1f);
+        protected override void OnHit()
+        {
+            if (Animator == null) return;
+            // Se o controller tiver a trigger de hurt:
+            // Animator.SetTrigger("Hurt");
+        }
+
+        protected override void OnDieEffect()
+        {
+            if (Data == null) return;
+
+            Treasure treasure = FindAnyObjectByType<Treasure>();
+            if (treasure != null) treasure.AddGold(Data.goldReward);
+
+            if (ResourceManager.Instance != null)
+                ResourceManager.Instance.AddEssence(Data.essenceReward);
+
+            Debug.Log($"Herói derrotado: +{Data.goldReward} Gold, +{Data.essenceReward} Essência");
+
+            // Aciona o estado de Morte (DeathBack = 6 no Animator)
+            SetState((int)CharacterState.DeathBack);
+        }
+
+        public override void Die()
+        {
+            OnDieEffect();
+
+            Collider2D col = GetComponent<Collider2D>();
+            if (col != null) col.enabled = false;
+
+            Destroy(gameObject, 1.2f);
+        }
+        
+        public void CelebrateVictoryAndDespawn(float victoryDuration = 1.5f)
+            {
+                // Para de andar/atacar e ativa a comemoração
+                if (Animator != null)
+                {
+                    Debug.Log("Herói comemorando vitória!");
+                    Animator.SetInteger(StateHash, 0); // Stand
+                    Animator.SetBool(Victory, true); // Ativa a animação de Vitória
+                }
+
+                // Desativa colisão para não interferir em nada na sala
+                Collider2D col = GetComponent<Collider2D>();
+                if (col != null) col.enabled = false;
+
+                // Espera a comemoração e desaparece
+                StartCoroutine(VictoryRoutine(victoryDuration));
+            }
+
+        private IEnumerator VictoryRoutine(float duration)
+        {
+            Debug.Log($"Herói comemorando por {duration} segundos antes de desaparecer.");
+            yield return new WaitForSeconds(duration);
+            Destroy(gameObject);
+        }
     }
 }

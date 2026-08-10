@@ -1,4 +1,5 @@
 using UnityEngine;
+using DungeonKeeper;
 
 [CreateAssetMenu(fileName = "SkillUpgrade", menuName = "Dungeon/Skill Upgrade")]
 public class SkillUpgrade : ScriptableObject
