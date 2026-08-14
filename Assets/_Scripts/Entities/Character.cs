@@ -26,9 +26,12 @@ namespace DungeonKeeper
             
             if (_healthBarPrefab != null)
             {
-                GameObject bar = Instantiate(_healthBarPrefab, transform.position, Quaternion.identity);
+                // 1. Instancia exatamente na posição do HeadPoint (em cima da cabeça)
+                GameObject bar = Instantiate(_healthBarPrefab, HeadPoint.position, Quaternion.identity);
                 _healthBar = bar.GetComponent<HealthBar>();
-                _healthBar.Initialize(transform);
+                
+                // 2. Passa a referência do HeadPoint para a barra seguir o ponto correto!
+                _healthBar.Initialize(HeadPoint);
                 _healthBar.UpdateHealth(Health.MaxHP);
             }
         }
@@ -40,9 +43,13 @@ namespace DungeonKeeper
             OnAttack();
         }
 
+        /// <summary>
+        /// Move o personagem no Espaço do Mundo (Space.World) para evitar que o localScale (Flip) inverta a direção do movimento!
+        /// </summary>
         public virtual void Move(Vector2 direction)
         {
-            transform.Translate(direction * Stats.moveSpeed * Time.deltaTime);
+            // CRÍTICO: Space.World garante que Vector2.right SEMPRE vá para a direita do mapa, independente do Flip!
+            transform.Translate(direction * Stats.moveSpeed * Time.deltaTime, Space.World);
         }
 
         public override void TakeDamage(int amount)
@@ -57,12 +64,17 @@ namespace DungeonKeeper
             // Debug.Log($"HealthBar updated. Current health percent: {Health.Percent}");
         }
 
+        /// <summary>
+        /// Valida o alcance usando o FeetPoint para garantir precisão com os pivôs do chão
+        /// </summary>
         public bool InRange(ITargetable target)
         {
             if (target == null) return false;
-            return Vector2.Distance(
-                transform.position,
-                target.Transform.position) <= Stats.attackRange;
+            
+            Vector2 myPos = FeetPoint != null ? (Vector2)FeetPoint.position : (Vector2)transform.position;
+            Vector2 targetPos = target.Transform != null ? (Vector2)target.Transform.position : (Vector2)transform.position;
+
+            return Vector2.Distance(myPos, targetPos) <= Stats.attackRange;
         }
 
         protected override void OnDeath() => Die();

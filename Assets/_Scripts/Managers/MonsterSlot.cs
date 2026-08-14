@@ -1,100 +1,90 @@
-using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace DungeonKeeper
 {
     public class MonsterSlot : MonoBehaviour
     {
-        [SerializeField] private int _slotIndex; // 0, 1 ou 2
-        [SerializeField] private float _respawnDelay = 3f;
+        [Header("Configurações do Slot")]
+        [SerializeField] private Button _slotButton;
+        [SerializeField] private SpriteRenderer _slotWorldPreview;
+        [SerializeField] private GameObject _highlightObject; // Objeto/Glow visual de highlight do slot
+        [SerializeField] private Transform _spawnPoint;
 
-        private MonsterData _assignedData;
-        private Monster _currentMonster;
-        private Coroutine _respawnRoutine;
+        public MonsterData EquippedMonsterData { get; private set; }
+        private GameObject _spawnedMonsterInstance;
 
-        public int SlotIndex => _slotIndex;
-        public bool HasMonsterAssigned => _assignedData != null;
+        // Propriedade booleana para checar se o slot tem um monstro
+        public bool HasMonsterEquipped => EquippedMonsterData != null;
 
-        /// <summary>
-        /// Aloca um novo monstro a este slot (vindo do inventário/casulo)
-        /// </summary>
-        public void AssignMonster(MonsterData data)
+        private void Awake()
         {
-            _assignedData = data;
+            if (_slotButton != null)
+                _slotButton.onClick.AddListener(OnClickSlot);
 
-            // Se trocou de monstro enquanto havia um vivo, limpa o antigo
-            if (_currentMonster != null)
-            {
-                Destroy(_currentMonster.gameObject);
-            }
+            // Garante que o highlight comece desligado
+            SetHighlightVisible(false);
+        }
 
-            if (_respawnRoutine != null)
-            {
-                StopCoroutine(_respawnRoutine);
-            }
-
-            SpawnMonster();
+        private void OnClickSlot()
+        {
+            UI_InventoryPanel.Instance?.OpenForSlot(this);
         }
 
         /// <summary>
-        /// Remove o monstro alocado (manda de volta para a reserva ou limpa)
+        /// Ativa ou desativa o destaque visual do slot
         /// </summary>
-        public void ClearSlot()
+        public void SetHighlightVisible(bool visible)
         {
-            _assignedData = null;
-            if (_currentMonster != null)
+            if (_highlightObject != null)
             {
-                Destroy(_currentMonster.gameObject);
+                _highlightObject.SetActive(visible);
             }
         }
 
-        private void SpawnMonster()
+        public void EquipMonster(MonsterData data)
         {
-            if (_assignedData == null || _assignedData.prefab == null) return;
+            UnequipCurrentMonster();
 
-            GameObject obj = Instantiate(_assignedData.prefab, transform.position, Quaternion.identity);
-            _currentMonster = obj.GetComponent<Monster>();
+            EquippedMonsterData = data;
 
-            if (_currentMonster != null)
+            if (_slotWorldPreview != null && data != null && data.icon != null)
             {
-                _currentMonster.Initialize(_assignedData);
-
-                if (_currentMonster.Health != null)
-                {
-                    _currentMonster.Health.OnDeath += OnMonsterDied;
-                }
-
-                AssignBrain(obj, _assignedData.defaultBehavior);
+                _slotWorldPreview.sprite = data.icon;
             }
+
+            SpawnEquippedMonster();
         }
 
-        private void OnMonsterDied()
+        public void ApplyEquippedMonster(MonsterData data) => EquipMonster(data);
+
+        public void ClearSlot() => UnequipCurrentMonster();
+
+        public void UnequipCurrentMonster()
         {
-            _respawnRoutine = StartCoroutine(RespawnAfterDelay());
-        }
-
-        private IEnumerator RespawnAfterDelay()
-        {
-            yield return new WaitForSeconds(_respawnDelay);
-
-            if (GameManager.Instance != null && GameManager.Instance.CurrentState != GameState.Playing)
-                yield break;
-
-            // O monstro renasce no mesmo slot sem custo adicional!
-            if (_assignedData != null)
+            if (_spawnedMonsterInstance != null)
             {
-                SpawnMonster();
+                Destroy(_spawnedMonsterInstance);
+                _spawnedMonsterInstance = null;
             }
+
+            EquippedMonsterData = null;
+
+            if (_slotWorldPreview != null)
+                _slotWorldPreview.sprite = null;
         }
 
-        private void AssignBrain(GameObject obj, MonsterBehavior behavior)
+        private void SpawnEquippedMonster()
         {
-            switch (behavior)
+            if (EquippedMonsterData == null || EquippedMonsterData.prefab == null) return;
+
+            Vector3 spawnPos = _spawnPoint != null ? _spawnPoint.position : transform.position;
+            _spawnedMonsterInstance = Instantiate(EquippedMonsterData.prefab, spawnPos, Quaternion.identity);
+
+            Monster monsterComp = _spawnedMonsterInstance.GetComponent<Monster>();
+            if (monsterComp != null)
             {
-                case MonsterBehavior.Defensive:
-                    if (obj.GetComponent<MonsterBrain>() == null)
-                        obj.AddComponent<MonsterBrain>();
-                    break;
+                monsterComp.Initialize(EquippedMonsterData);
             }
         }
     }

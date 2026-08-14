@@ -1,5 +1,5 @@
 using UnityEngine;
-using System.Collections; // <-- ADICIONE ESTA LINHA SE NÃO ESTIVER LÁ
+using System.Collections;
 
 namespace DungeonKeeper
 {
@@ -11,7 +11,8 @@ namespace DungeonKeeper
         private static readonly int StateHash = Animator.StringToHash("State");
         private static readonly int Victory = Animator.StringToHash("Victory");
 
-        // Enum opcional para deixar o código bem legível e organizado
+        private int _currentStateValue = -1; // Cache para evitar chamadas redundantes ao Animator
+
         private enum CharacterState
         {
             Stand = 0,
@@ -32,21 +33,23 @@ namespace DungeonKeeper
         }
 
         /// <summary>
-        /// Define a animação pelo número do estado do Hero Editor
+        /// Define a animação pelo número do estado do Hero Editor, evitando requisições repetidas no mesmo frame
         /// </summary>
         public void SetState(int stateValue)
         {
             if (Animator == null) return;
+
+            // Só envia para o Animator se o estado REALMENTE mudou!
+            if (_currentStateValue == stateValue) return;
+
+            _currentStateValue = stateValue;
             Animator.SetInteger(StateHash, stateValue);
         }
 
         protected override void OnAttack()
         {
             if (Animator == null) return;
-            
-            // Quando ataca, se houver um estado de ataque no Animator ou Trigger:
-            // Por exemplo, podemos resetar o estado de corrida para Stand/Attack:
-            SetState((int)CharacterState.Stand);
+            // Efeitos visuais ou sonoros adicionais ao atacar podem vir aqui
         }
 
         protected override void OnHit()
@@ -81,24 +84,21 @@ namespace DungeonKeeper
 
             Destroy(gameObject, 1.2f);
         }
-        
+
         public void CelebrateVictoryAndDespawn(float victoryDuration = 1.5f)
+        {
+            if (Animator != null)
             {
-                // Para de andar/atacar e ativa a comemoração
-                if (Animator != null)
-                {
-                    Debug.Log("Herói comemorando vitória!");
-                    Animator.SetInteger(StateHash, 0); // Stand
-                    Animator.SetBool(Victory, true); // Ativa a animação de Vitória
-                }
-
-                // Desativa colisão para não interferir em nada na sala
-                Collider2D col = GetComponent<Collider2D>();
-                if (col != null) col.enabled = false;
-
-                // Espera a comemoração e desaparece
-                StartCoroutine(VictoryRoutine(victoryDuration));
+                Debug.Log("Herói comemorando vitória!");
+                SetState((int)CharacterState.Stand);
+                Animator.SetBool(Victory, true);
             }
+
+            Collider2D col = GetComponent<Collider2D>();
+            if (col != null) col.enabled = false;
+
+            StartCoroutine(VictoryRoutine(victoryDuration));
+        }
 
         private IEnumerator VictoryRoutine(float duration)
         {

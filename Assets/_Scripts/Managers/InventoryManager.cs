@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System;
 
 namespace DungeonKeeper
 {
@@ -8,74 +7,63 @@ namespace DungeonKeeper
     {
         public static InventoryManager Instance { get; private set; }
 
-        [Header("Slots Ativos na Sala (Máximo 3)")]
-        [SerializeField] private List<MonsterSlot> _activeSlots = new List<MonsterSlot>();
+        [Header("Lista de Monstros Descobertos/Cadastrados no Jogo")]
+        [SerializeField] private List<MonsterData> _allDiscoveredMonsters = new List<MonsterData>();
 
-        [Header("Configuração da Reserva")]
-        [SerializeField] private int _initialReserveSlots = 5;
-        [SerializeField] private int _maxReserveSlotsAllowed = 10;
+        private Dictionary<MonsterData, int> _ownedMonsters = new Dictionary<MonsterData, int>();
+        private Dictionary<MonsterSlot, MonsterData> _equippedSlots = new Dictionary<MonsterSlot, MonsterData>();
 
-        // Lista de dados dos monstros na reserva
-        private List<MonsterData> _reserveMonsters = new List<MonsterData>();
+        public IReadOnlyList<MonsterData> AllDiscoveredMonsters => _allDiscoveredMonsters;
 
-        public int CurrentReserveCapacity { get; private set; }
-        public int ReserveCount => _reserveMonsters.Count;
-
-        public event Action OnInventoryUpdated;
-
-        void Awake()
+        private void Awake()
         {
-            if (Instance == null) Instance = this;
-            else Destroy(gameObject);
-
-            CurrentReserveCapacity = _initialReserveSlots;
+            if (Instance != null && Instance != this) Destroy(gameObject);
+            else Instance = this;
         }
 
-        /// <summary>
-        /// Adiciona um monstro recém-chocado do Casulo para a Reserva
-        /// </summary>
-        public bool AddToReserve(MonsterData newMonster)
+        public int GetAvailableCount(MonsterData data)
         {
-            if (_reserveMonsters.Count >= CurrentReserveCapacity)
+            if (data == null) return 0;
+
+            if (!_ownedMonsters.ContainsKey(data)) 
+                _ownedMonsters[data] = 1; // Padrão de teste: 1 no estoque inicial
+
+            int owned = _ownedMonsters[data];
+            int equipped = 0;
+
+            foreach (var kvp in _equippedSlots)
             {
-                Debug.LogWarning("Inventário de Reserva Cheio!");
-                return false;
+                if (kvp.Value == data) equipped++;
             }
 
-            _reserveMonsters.Add(newMonster);
-            OnInventoryUpdated?.Invoke();
-            return true;
+            return Mathf.Max(0, owned - equipped);
         }
 
-        /// <summary>
-        /// Equipar/Trocar um monstro da Reserva para um Slot Ativo da Sala
-        /// </summary>
-        public void EquipToActiveSlot(int reserveIndex, int activeSlotIndex)
+        public void EquipMonsterInSlot(MonsterSlot slot, MonsterData data)
         {
-            if (reserveIndex < 0 || reserveIndex >= _reserveMonsters.Count) return;
-            if (activeSlotIndex < 0 || activeSlotIndex >= _activeSlots.Count) return;
+            if (slot == null) return;
 
-            MonsterData dataToEquip = _reserveMonsters[reserveIndex];
+            if (_equippedSlots.ContainsKey(slot))
+            {
+                _equippedSlots.Remove(slot);
+            }
 
-            // Se o slot ativo já tinha um monstro, o antigo volta para a reserva
-            _activeSlots[activeSlotIndex].AssignMonster(dataToEquip);
-            _reserveMonsters.RemoveAt(reserveIndex);
-
-            OnInventoryUpdated?.Invoke();
+            if (data != null && GetAvailableCount(data) > 0)
+            {
+                _equippedSlots[slot] = data;
+                slot.ApplyEquippedMonster(data);
+            }
         }
 
-        /// <summary>
-        /// Expande a capacidade de slots da reserva (Comprado via Gold/Monetização)
-        /// </summary>
-        public bool ExpandReserveSlots(int amount = 1)
+        public void UnequipSlot(MonsterSlot slot)
         {
-            if (CurrentReserveCapacity >= _maxReserveSlotsAllowed) return false;
+            if (slot == null) return;
 
-            CurrentReserveCapacity = Mathf.Min(CurrentReserveCapacity + amount, _maxReserveSlotsAllowed);
-            OnInventoryUpdated?.Invoke();
-            return true;
+            if (_equippedSlots.ContainsKey(slot))
+            {
+                _equippedSlots.Remove(slot);
+                slot.ClearSlot();
+            }
         }
-
-        public List<MonsterData> GetReserveMonsters() => _reserveMonsters;
     }
 }

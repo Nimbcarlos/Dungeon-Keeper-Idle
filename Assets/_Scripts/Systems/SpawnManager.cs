@@ -82,7 +82,15 @@ namespace DungeonKeeper
         {
             if (_heroSpawn == null) return;
 
+            // No momento do Spawn do Herói:
             GameObject obj = Instantiate(data.prefab, _heroSpawn.position, Quaternion.identity);
+
+            // Pega o componente e sorteia o visual na hora!
+            HeroRandomizer randomizer = obj.GetComponent<HeroRandomizer>();
+            if (randomizer != null)
+            {
+                randomizer.RandomizeEquipment();
+            }
 
             Hero hero = obj.GetComponent<Hero>();
             if (hero != null)
