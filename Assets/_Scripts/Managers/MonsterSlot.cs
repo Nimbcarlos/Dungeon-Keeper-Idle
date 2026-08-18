@@ -1,39 +1,36 @@
+using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace DungeonKeeper
 {
     public class MonsterSlot : MonoBehaviour
     {
         [Header("Configurações do Slot")]
-        [SerializeField] private Button _slotButton;
-        [SerializeField] private SpriteRenderer _slotWorldPreview;
-        [SerializeField] private GameObject _highlightObject; // Objeto/Glow visual de highlight do slot
+        [SerializeField] private GameObject _highlightObject;
         [SerializeField] private Transform _spawnPoint;
+        
+        [Header("Configurações de Respawn")]
+        [SerializeField] private float _respawnDelay = 5f; // Tempo em segundos para o monstro renascer
 
         public MonsterData EquippedMonsterData { get; private set; }
         private GameObject _spawnedMonsterInstance;
+        private Coroutine _respawnCoroutine;
 
-        // Propriedade booleana para checar se o slot tem um monstro
         public bool HasMonsterEquipped => EquippedMonsterData != null;
 
-        private void Awake()
+        private void OnMouseDown()
         {
-            if (_slotButton != null)
-                _slotButton.onClick.AddListener(OnClickSlot);
-
-            // Garante que o highlight comece desligado
-            SetHighlightVisible(false);
+            OnClickSlot();
         }
 
-        private void OnClickSlot()
+        public void OnClickSlot()
         {
-            UI_InventoryPanel.Instance?.OpenForSlot(this);
+            if (UI_MonsterInventoryWindow.Instance != null && UI_MonsterInventoryWindow.Instance.IsOpen)
+            {
+                UI_MonsterInventoryWindow.Instance.AssignSelectedMonsterToLane(this);
+            }
         }
 
-        /// <summary>
-        /// Ativa ou desativa o destaque visual do slot
-        /// </summary>
         public void SetHighlightVisible(bool visible)
         {
             if (_highlightObject != null)
@@ -42,25 +39,46 @@ namespace DungeonKeeper
             }
         }
 
+        /// <summary>
+        /// Equipa um novo monstro e o instancia imediatamente
+        /// </summary>
         public void EquipMonster(MonsterData data)
         {
-            UnequipCurrentMonster();
+            ClearSlot();
 
             EquippedMonsterData = data;
 
-            if (_slotWorldPreview != null && data != null && data.icon != null)
-            {
-                _slotWorldPreview.sprite = data.icon;
-            }
-
+            // Instancia o monstro sem delay na primeira vez que equipa
             SpawnEquippedMonster();
         }
 
-        public void ApplyEquippedMonster(MonsterData data) => EquipMonster(data);
+        /// <summary>
+        /// Inicia o timer para renascer o monstro após X segundos (chame quando o monstro morrer)
+        /// </summary>
+        public void ScheduleRespawn()
+        {
+            if (EquippedMonsterData == null) return;
 
-        public void ClearSlot() => UnequipCurrentMonster();
+            if (_respawnCoroutine != null)
+            {
+                StopCoroutine(_respawnCoroutine);
+            }
 
-        public void UnequipCurrentMonster()
+            _respawnCoroutine = StartCoroutine(RespawnRoutine());
+        }
+
+        private IEnumerator RespawnRoutine()
+        {
+            yield return new WaitForSeconds(_respawnDelay);
+            
+            SpawnEquippedMonster();
+            _respawnCoroutine = null;
+        }
+
+        /// <summary>
+        /// Método de Spawn: Instancia a entidade no jogo
+        /// </summary>
+        public void SpawnEquippedMonster()
         {
             if (_spawnedMonsterInstance != null)
             {
@@ -68,14 +86,6 @@ namespace DungeonKeeper
                 _spawnedMonsterInstance = null;
             }
 
-            EquippedMonsterData = null;
-
-            if (_slotWorldPreview != null)
-                _slotWorldPreview.sprite = null;
-        }
-
-        private void SpawnEquippedMonster()
-        {
             if (EquippedMonsterData == null || EquippedMonsterData.prefab == null) return;
 
             Vector3 spawnPos = _spawnPoint != null ? _spawnPoint.position : transform.position;
@@ -85,7 +95,33 @@ namespace DungeonKeeper
             if (monsterComp != null)
             {
                 monsterComp.Initialize(EquippedMonsterData);
+
+                // ← registra o respawn quando o monstro morrer
+                monsterComp.Health.OnDeath += () => ScheduleRespawn();
             }
+        }
+
+
+        /// <summary>
+        /// Limpa o monstro do slot e cancela qualquer respawn pendente
+        /// </summary>
+        public void ClearSlot()
+        {
+            if (_respawnCoroutine != null)
+            {
+                Debug.Log($"🗑️ Cancelando respawn do monstro {EquippedMonsterData.displayName} na lane.");
+                StopCoroutine(_respawnCoroutine);
+                _respawnCoroutine = null;
+            }
+
+            if (_spawnedMonsterInstance != null)
+            {
+                Debug.Log($"🗑️ Monstro {EquippedMonsterData.displayName} removido da lane.");
+                Destroy(_spawnedMonsterInstance);
+                _spawnedMonsterInstance = null;
+            }
+
+            EquippedMonsterData = null;
         }
     }
 }
