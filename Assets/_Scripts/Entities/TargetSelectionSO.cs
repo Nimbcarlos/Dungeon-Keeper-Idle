@@ -5,7 +5,8 @@ namespace DungeonKeeper
     public abstract class TargetSelectionSO : ScriptableObject
     {
         /// <summary>
-        /// Método abstrato que cada estratégia vai implementar para escolher um alvo
+        /// Dado um originador e um array de alvos potenciais (Monstros, Invocações, Armadilhas),
+        /// retorna o Character ideal segundo a regra desta estratégia.
         /// </summary>
         public abstract Character SelectTarget(Character self, Character[] potentialTargets);
     }

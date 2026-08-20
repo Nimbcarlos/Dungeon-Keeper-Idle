@@ -69,6 +69,9 @@ namespace DungeonKeeper
             if (ResourceManager.Instance != null)
                 ResourceManager.Instance.AddEssence(Data.essenceReward);
 
+            if (ResourceManager.Instance != null)
+                ResourceManager.Instance.GrantXPToActiveMonsters(Data._xpReward); // Atualiza o valor de XP fixo para os monstros
+
             Debug.Log($"Herói derrotado: +{Data.goldReward} Gold, +{Data.essenceReward} Essência");
 
             // Aciona o estado de Morte (DeathBack = 6 no Animator)

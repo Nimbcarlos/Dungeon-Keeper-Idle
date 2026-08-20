@@ -10,6 +10,7 @@ namespace DungeonKeeper
 
         public int Gold    { get; private set; }
         public int Essence { get; private set; }
+        public int xpReward { get; private set; }
 
         public event Action<int> OnGoldChanged;
         public event Action<int> OnEssenceChanged;
@@ -57,5 +58,21 @@ namespace DungeonKeeper
             OnEssenceChanged?.Invoke(Essence);
             return true;
         }
+
+        public void GrantXPToActiveMonsters(int amount)
+        {
+            Monster[] activeMonsters = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);
+            xpReward = amount; // Atualiza o valor de XP fixo para os monstros
+
+            foreach (Monster monster in activeMonsters)
+            {
+                if (monster != null && monster.IsAlive)
+                {
+                    // Cada monstro ganha o valor MÁXIMO e FIXO definido no _xpReward
+                    monster.GainXP(xpReward);
+                }
+            }
+        }
+
     }
 }

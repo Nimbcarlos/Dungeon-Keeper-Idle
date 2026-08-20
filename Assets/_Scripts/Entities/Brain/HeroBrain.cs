@@ -20,8 +20,10 @@ namespace DungeonKeeper
 
         private Vector2 MyFeetPos => character.FeetPoint != null ? (Vector2)character.FeetPoint.position : (Vector2)transform.position;
 
-        // Propriedade para checar se o herói é Ranged ou Melee
         private bool IsRangedHero => character.Stats != null && character.Stats.attackRange > 1.5f;
+
+        [Header("Módulos de Comportamento")]
+        [SerializeField] private TargetSelectionSO _targetStrategy;
 
         protected override void Awake()
         {
@@ -71,14 +73,13 @@ namespace DungeonKeeper
 
         private void UpdateMovingState()
         {
-            Monster closestMonster = FindClosestMonster();
+            Monster targetMonster = FindTargetMonster();
 
-            if (closestMonster != null)
+            if (targetMonster != null)
             {
-                // Calcula a posição ideal de combate respeitando a fila e se é Melee/Ranged
-                Vector2 targetAttackPos = GetCalculatedAttackPosition(closestMonster);
+                Vector2 targetAttackPos = GetCalculatedAttackPosition(targetMonster);
 
-                if (IsTargetInAttackRange(closestMonster, targetAttackPos))
+                if (IsTargetInAttackRange(targetMonster, targetAttackPos))
                 {
                     SetState(BrainState.InCombat);
                     return;
@@ -115,38 +116,37 @@ namespace DungeonKeeper
 
         private void UpdateCombatState()
         {
-            Monster closestMonster = FindClosestMonster();
+            Monster targetMonster = FindTargetMonster();
 
-            if (closestMonster == null || !closestMonster.IsAlive)
+            if (targetMonster == null || !targetMonster.IsAlive)
             {
                 _pauseTimer = _postCombatPauseDuration;
                 SetState(BrainState.MovingToTarget);
                 return;
             }
 
-            Vector2 targetAttackPos = GetCalculatedAttackPosition(closestMonster);
+            Vector2 targetAttackPos = GetCalculatedAttackPosition(targetMonster);
 
-            if (!IsTargetInAttackRange(closestMonster, targetAttackPos))
+            if (!IsTargetInAttackRange(targetMonster, targetAttackPos))
             {
                 SetState(BrainState.MovingToTarget);
                 return;
             }
 
-            ExecuteMovement(Vector2.zero, GetEntityFeetPos(closestMonster).x - MyFeetPos.x);
+            ExecuteMovement(Vector2.zero, GetEntityFeetPos(targetMonster).x - MyFeetPos.x);
 
             if (_attackTimer <= 0f)
             {
                 if (_hero != null) _hero.SetState(0);
                 
-                // Triggers de animação dependentes do tipo
                 if (IsRangedHero)
                     character.Animator?.SetTrigger("Shoot"); 
                 else
                     character.Animator?.SetTrigger("Slash");
 
-                character.Attack(closestMonster);
+                character.Attack(targetMonster);
 
-                if (!closestMonster.IsAlive)
+                if (!targetMonster.IsAlive)
                 {
                     _pauseTimer = _postCombatPauseDuration;
                     SetState(BrainState.MovingToTarget);
@@ -156,43 +156,35 @@ namespace DungeonKeeper
             }
         }
 
-        /// <summary>
-        /// Calcula onde este herói específico deve se posicionar para atacar o monstro sem empilhar nos aliados.
-        /// </summary>
         private Vector2 GetCalculatedAttackPosition(Monster monster)
         {
             Vector2 monsterPos = GetEntityFeetPos(monster);
 
-            // RANGED: Para a uma distância segura na mesma faixa
             if (IsRangedHero)
             {
                 float safeDistance = character.Stats.attackRange * 0.8f;
                 return new Vector2(monsterPos.x - safeDistance, monsterPos.y);
             }
 
-            // MELEE: Descobre quantos outros heróis Melee já estão atacando este mesmo monstro
             int meleeIndex = GetMeleeQueueIndex(monster);
 
-            // Distribuição em arco (Frente, Cima, Baixo)
+            // 🎯 AUMENTANDO O ESPAÇAMENTO VISUAL (offsets X e Y maiores):
             switch (meleeIndex)
             {
-                case 0: // 1º Melee: Ataca diretamente pela frente
+                case 0: // 1º Melee: Frente direta do monstro
                     return new Vector2(monsterPos.x - 0.75f, monsterPos.y);
 
-                case 1: // 2º Melee: Ataca ligeiramente acima (diagonal superior)
-                    return new Vector2(monsterPos.x - 0.65f, monsterPos.y + 0.35f);
+                case 1: // 2º Melee: Bem mais para CIMA (+0.60 no Y) e um pouco mais recuado no X
+                    return new Vector2(monsterPos.x - 0.85f, monsterPos.y + 0.60f);
 
-                case 2: // 3º Melee: Ataca ligeiramente abaixo (diagonal inferior)
-                    return new Vector2(monsterPos.x - 0.65f, monsterPos.y - 0.35f);
+                case 2: // 3º Melee: Bem mais para BAIXO (-0.60 no Y) e um pouco mais recuado no X
+                    return new Vector2(monsterPos.x - 0.85f, monsterPos.y - 0.60f);
 
-                default: // Demais: Aguardam um pouco atrás do 1º
-                    return new Vector2(monsterPos.x - (0.75f + (meleeIndex * 0.5f)), monsterPos.y);
+                default: // 4º+ Melee: Forma uma segunda fila atrás dos primeiros
+                    return new Vector2(monsterPos.x - (0.75f + (meleeIndex * 0.4f)), monsterPos.y);
             }
         }
 
-        /// <summary>
-        /// Retorna a posição deste herói na fila de combate melee contra o monstro
-        /// </summary>
         private int GetMeleeQueueIndex(Monster monster)
         {
             Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude);
@@ -202,38 +194,104 @@ namespace DungeonKeeper
             {
                 if (h == character || h == null || !h.IsAlive) continue;
 
-                // Se o outro herói também é Melee e está mais perto do monstro que eu, ele ganha prioridade
                 HeroBrain otherBrain = h.GetComponent<HeroBrain>();
                 if (otherBrain != null && !otherBrain.IsRangedHero)
                 {
                     Vector2 otherPos = GetEntityFeetPos(h);
                     Vector2 monsterPos = GetEntityFeetPos(monster);
 
-                    if (Vector2.Distance(otherPos, monsterPos) < Vector2.Distance(MyFeetPos, monsterPos))
+                    float myDist = Vector2.Distance(MyFeetPos, monsterPos);
+                    float otherDist = Vector2.Distance(otherPos, monsterPos);
+
+                    if (otherDist < myDist - 0.05f)
                     {
                         index++;
+                    }
+                    else if (Mathf.Abs(myDist - otherDist) <= 0.05f)
+                    {
+                        if (h.gameObject.GetEntityId() < gameObject.GetEntityId())
+                        {
+                            index++;
+                        }
                     }
                 }
             }
             return index;
         }
 
+        /// <summary>
+        /// TESTE 1: Histerese de alcance refinada
+        /// </summary>
         private bool IsTargetInAttackRange(Monster monster, Vector2 targetAttackPos)
         {
+            if (monster == null || !monster.IsAlive)
+                return false;
+
             Vector2 monsterFeetPos = GetEntityFeetPos(monster);
-            float distToMonster = Vector2.Distance(MyFeetPos, monsterFeetPos);
 
-            // Ranged ataca por distância pura
-            if (IsRangedHero)
-            {
-                return distToMonster <= character.Stats.attackRange;
-            }
+            float tolerance = (_currentState == BrainState.InCombat) ? 0.7f : 0.25f;
 
-            // Melee checa se chegou ao ponto de cerco calculado
             float diffX = Mathf.Abs(MyFeetPos.x - targetAttackPos.x);
             float diffY = Mathf.Abs(MyFeetPos.y - targetAttackPos.y);
 
-            return diffX <= 0.2f && diffY <= Y_THRESHOLD + 0.25f;
+            bool closeToSlot = diffX <= tolerance && diffY <= (Y_THRESHOLD + tolerance);
+
+            float distToMonster = Vector2.Distance(MyFeetPos, monsterFeetPos);
+            bool closeToMonster = distToMonster <= (character.Stats.attackRange + 0.3f);
+
+            return closeToSlot || closeToMonster;
+        }
+
+        /// <summary>
+        /// TESTE 2: Desbloqueio próximo à região de combate
+        /// </summary>
+        private bool IsBlockedByAlly()
+        {
+            if (_currentState != BrainState.MovingToTarget)
+                return false;
+
+            Monster targetMonster = FindTargetMonster();
+
+            if (targetMonster != null)
+            {
+                float distToMonster = Vector2.Distance(MyFeetPos, GetEntityFeetPos(targetMonster));
+
+                if (distToMonster < 1.2f)
+                    return false;
+            }
+
+            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude);
+
+            foreach (Hero h in heroes)
+            {
+                if (h == character || h == null || !h.IsAlive)
+                    continue;
+
+                Vector2 otherFeetPos = GetEntityFeetPos(h);
+
+                float deltaX = otherFeetPos.x - MyFeetPos.x;
+                float deltaY = Mathf.Abs(otherFeetPos.y - MyFeetPos.y);
+
+                if (deltaX > 0.1f && deltaX < 0.5f && deltaY < Y_THRESHOLD)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// PROVA DO CRIME: Rastreamento estrito de transições de estado
+        /// </summary>
+        public void SetState(BrainState newState)
+        {
+            if (_currentState != newState)
+            {
+                // Debug.Log($"🧠 [{name}] {_currentState} → {newState} | ID={gameObject.GetEntityId()}");
+            }
+
+            _currentState = newState;
         }
 
         private void ExecuteSackTreasure(Treasure treasure, float treasureY)
@@ -251,8 +309,6 @@ namespace DungeonKeeper
             if (_hero != null)
                 _hero.CelebrateVictoryAndDespawn(1.5f);
         }
-
-        public void SetState(BrainState newState) => _currentState = newState;
 
         private void ExecuteMovement(Vector2 moveDirection, float lookDirectionX)
         {
@@ -283,22 +339,6 @@ namespace DungeonKeeper
             return Vector2.zero;
         }
 
-        private Monster FindClosestMonster()
-        {
-            Monster[] monsters = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);
-            Monster closest = null;
-            float minDist = float.MaxValue;
-
-            foreach (Monster m in monsters)
-            {
-                if (m == null || !m.IsAlive) continue;
-                Vector2 mFeet = GetEntityFeetPos(m);
-                float dist = Vector2.Distance(MyFeetPos, mFeet);
-                if (dist < minDist) { minDist = dist; closest = m; }
-            }
-            return closest;
-        }
-
         private void ApplyVisualFlip(float directionX)
         {
             if (Mathf.Abs(directionX) < 0.01f) return;
@@ -307,24 +347,44 @@ namespace DungeonKeeper
             transform.localScale = scale;
         }
 
-        private bool IsBlockedByAlly()
-        {
-            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude);
-            foreach (Hero h in heroes)
-            {
-                if (h == character || h == null || !h.IsAlive) continue;
-                Vector2 otherFeetPos = GetEntityFeetPos(h);
-                
-                // Se o aliado está na frente E no mesmo ponto $Y$, bloqueia a passagem
-                if (otherFeetPos.x > MyFeetPos.x && Mathf.Abs(otherFeetPos.y - MyFeetPos.y) < Y_THRESHOLD && Vector2.Distance(MyFeetPos, otherFeetPos) < 0.5f)
-                    return true;
-            }
-            return false;
-        }
-
         private Vector2 GetEntityFeetPos(Character entity)
         {
             return entity.FeetPoint != null ? (Vector2)entity.FeetPoint.position : (Vector2)entity.transform.position;
+        }
+
+        private Monster FindTargetMonster()
+        {
+            Character[] potentialTargets = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);
+
+            if (potentialTargets == null || potentialTargets.Length == 0) return null;
+
+            if (_targetStrategy != null)
+            {
+                Character selectedCharacter = _targetStrategy.SelectTarget(this.character, potentialTargets);
+                return selectedCharacter as Monster;
+            }
+
+            return FindClosestMonsterFallback(potentialTargets);
+        }
+
+        private Monster FindClosestMonsterFallback(Character[] targets)
+        {
+            Vector2 myPos = MyFeetPos;
+            Monster closest = null;
+            float minDist = float.MaxValue;
+
+            foreach (Character t in targets)
+            {
+                if (t == null || !t.IsAlive) continue;
+                float dist = Vector2.Distance(myPos, GetEntityFeetPos(t));
+                if (dist < minDist) 
+                { 
+                    minDist = dist; 
+                    closest = t as Monster; 
+                }
+            }
+
+            return closest;
         }
     }
 }

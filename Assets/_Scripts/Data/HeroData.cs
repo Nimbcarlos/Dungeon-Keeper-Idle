@@ -21,5 +21,6 @@ namespace DungeonKeeper
         [Header("Loot ao morrer")]
         public int goldReward    = 10;
         public int essenceReward = 2;
+        public int _xpReward = 10; // Valor fixo concedido ao morrer
     }
 }
