@@ -23,12 +23,12 @@ public class MonsterData : ScriptableObject
 
     public int LevelCap => rarity switch
     {
-        MonsterRarity.Normal   => 5,
-        MonsterRarity.Uncommon => 10,
-        MonsterRarity.Rare     => 15,
-        MonsterRarity.Epic     => 20,
-        MonsterRarity.Legendary => 25,
-        _                      => 5
+        MonsterRarity.Normal   => 10,
+        MonsterRarity.Uncommon => 20,
+        MonsterRarity.Rare     => 30,
+        MonsterRarity.Epic     => 40,
+        MonsterRarity.Legendary => 50,
+        _                      => 10
     };
 
     [Header("Stats Base")]

@@ -34,5 +34,12 @@ namespace DungeonKeeper
             CurrentHP = Mathf.Min(MaxHP, CurrentHP + amount);
             OnHealed?.Invoke(amount);
         }
+
+        public void ModifyMaxHealth(float amount)
+        {
+            MaxHP += Mathf.RoundToInt(amount);
+            MaxHP = Mathf.Max(1, MaxHP); // Garante que a vida máxima seja pelo menos 1
+            CurrentHP = Mathf.Min(CurrentHP, MaxHP); // Ajusta a vida atual se necessário
+        }
     }
 }

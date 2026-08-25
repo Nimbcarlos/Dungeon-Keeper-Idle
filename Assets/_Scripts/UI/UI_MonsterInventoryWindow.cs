@@ -13,6 +13,8 @@ namespace DungeonKeeper
         [SerializeField] private UI_MonsterDisplay _monsterDisplay;
 
         [SerializeField] private TextMeshProUGUI _previewNameText;
+        [SerializeField] private TextMeshProUGUI _previewLevelText;  // NOVO: Exibe ex: "LVL: 5" ou "LVL: 25 (MAX)"
+        [SerializeField] private TextMeshProUGUI _previewXpText;     // NOVO: Exibe ex: "XP: 120 / 250"
         [SerializeField] private TextMeshProUGUI _previewHpText;
         [SerializeField] private TextMeshProUGUI _previewAttackText;
         [SerializeField] private TextMeshProUGUI _previewSpeedText;
@@ -47,7 +49,6 @@ namespace DungeonKeeper
 
             ToggleAllLaneHighlights(true);
 
-            // MUDANÇA CRÍTICA: Em vez de carregar todos da pasta, puxa apenas os desbloqueados do InventoryManager!
             List<MonsterData> availableMonsters = InventoryManager.Instance != null 
                 ? InventoryManager.Instance.GetUnlockedMonstersList() 
                 : new List<MonsterData>();
@@ -66,7 +67,6 @@ namespace DungeonKeeper
 
             InventoryManager.Instance?.RequestEquipMonster(targetSlot, _currentlySelectedMonster);
             
-            // Atualiza a lista filtrada
             List<MonsterData> availableMonsters = InventoryManager.Instance != null 
                 ? InventoryManager.Instance.GetUnlockedMonstersList() 
                 : new List<MonsterData>();
@@ -105,20 +105,39 @@ namespace DungeonKeeper
         {
             _currentlySelectedMonster = monster;
 
-            // Atualiza o monstro animado na UI!
             if (_monsterDisplay != null)
             {
                 _monsterDisplay.DisplayMonster(monster);
             }
 
+            // Puxa o Nível e XP persistidos no ScriptableObject
+            int level = monster.currentLevel;
+            int xp = monster.currentXP;
+            int nextLevelXP = monster.GetXPRequired(level + 1);
+            bool isMaxLevel = level >= monster.LevelCap;
+
+            // USO DO VAR: O C# detecta o tipo exato retornado por GetStatsForLevel automaticamente
+            var scaledStats = monster.GetStatsForLevel(level);
+
             if (_previewNameText != null) _previewNameText.text = monster.displayName;
-            if (_previewHpText != null) _previewHpText.text = $"HP: {monster.stats.maxHP}";
-            if (_previewAttackText != null) _previewAttackText.text = $"ATK: {monster.stats.attackPower}";
-            if (_previewSpeedText != null) _previewSpeedText.text = $"SPD: {monster.stats.moveSpeed}";
+            
+            // Exibição de Nível
+            if (_previewLevelText != null) 
+                _previewLevelText.text = isMaxLevel ? $"LVL: {level} (MAX)" : $"LVL: {level}";
+
+            // Exibição do Progresso de XP
+            if (_previewXpText != null) 
+                _previewXpText.text = isMaxLevel ? "XP: MAX" : $"XP: {xp} / {nextLevelXP}";
+
+            // Mapeamento dos Atributos
+            if (_previewHpText != null)     _previewHpText.text = $"HP: {scaledStats.maxHP}";
+            if (_previewAttackText != null) _previewAttackText.text = $"ATK: {scaledStats.attackPower}";
+            if (_previewSpeedText != null)  _previewSpeedText.text = $"SPD: {scaledStats.moveSpeed}";
 
             if (_instructionText != null) 
                 _instructionText.text = "Click on a lane on the map to place this monster!";
-        }  
+        }
+
 
         private void ToggleAllLaneHighlights(bool visible)
         {

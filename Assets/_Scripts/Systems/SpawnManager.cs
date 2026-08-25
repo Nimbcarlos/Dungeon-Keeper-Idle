@@ -135,7 +135,20 @@ namespace DungeonKeeper
         void CheckPartyFinished()
         {
             if (_currentParty.Count == 0)
+            {
+                // 💾 Chama o SaveManager para coletar os dados reais da cena e salvar
+                if (SaveManager.Instance != null)
+                {
+                    SaveManager.Instance.SaveGame();
+                }
+                else
+                {
+                    // Fallback procurando na cena caso não use Singleton
+                    FindAnyObjectByType<SaveManager>()?.SaveGame();
+                }
+
                 _partyActive = false;
+            }
         }
     }
 }

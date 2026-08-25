@@ -59,6 +59,13 @@ namespace DungeonKeeper
             return true;
         }
 
+        public void SetEssence(int amount)
+        {
+            Essence = amount;
+            OnEssenceChanged?.Invoke(Essence);
+        }
+
+
         public void GrantXPToActiveMonsters(int amount)
         {
             Monster[] activeMonsters = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);

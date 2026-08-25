@@ -32,7 +32,7 @@ namespace DungeonKeeper
             {
                 case GameState.Playing:  _timeManager.Resume(); break;
                 case GameState.Paused:   _timeManager.Pause();  break;
-                case GameState.GameOver: _timeManager.Pause(); _saveManager.Save(); Debug.Log("Game Over"); break;
+                case GameState.GameOver: _timeManager.Pause(); _saveManager.SaveGame(); Debug.Log("Game Over"); break;
             }
         }
     }

@@ -8,14 +8,16 @@ namespace DungeonKeeper
     {
         public static InventoryManager Instance { get; private set; }
 
-        [Header("Todos os Monstros Existentes no Jogo")]
-        [SerializeField] private List<MonsterData> _allGameMonsters = new List<MonsterData>();
+        [Header("Banco de Dados de Monstros")]
+        [SerializeField] private List<MonsterData> allMonsterData = new List<MonsterData>();
 
         // Mapeia: MonsterData -> Quantidade Desbloqueada/Possuída pelo jogador
         private Dictionary<MonsterData, int> _unlockedMonsters = new Dictionary<MonsterData, int>();
 
-        public IReadOnlyList<MonsterData> AllGameMonsters => _allGameMonsters;
+        public IReadOnlyList<MonsterData> AllGameMonsters => allMonsterData;
         public event Action OnInventoryChanged;
+
+
 
         private void Awake()
         {
@@ -27,7 +29,7 @@ namespace DungeonKeeper
             Instance = this;
 
             // INICIALIZAÇÃO DE TESTE: Libera 1 cópia de cada monstro por padrão
-            foreach (var monster in _allGameMonsters)
+            foreach (var monster in allMonsterData)
             {
                 _unlockedMonsters[monster] = 1;
             }
@@ -91,6 +93,11 @@ namespace DungeonKeeper
             return unlocked;
         }
 
+        public MonsterData FindMonsterDataByID(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            return allMonsterData.Find(d => d != null && d.id == id);
+        }
         /// <summary>
         /// REGRA DE EQUIPAR COM AUTO-SWAP
         /// </summary>
@@ -124,6 +131,7 @@ namespace DungeonKeeper
             // Equipar na nova lane
             targetSlot.EquipMonster(monster);
             OnInventoryChanged?.Invoke();
+            Debug.Log($"🛡️ Monstro {monster.displayName} equipado na lane {targetSlot.name}!");
         }
     }
 }

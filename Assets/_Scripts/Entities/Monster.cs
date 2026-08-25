@@ -1,54 +1,82 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 namespace DungeonKeeper
 {
+    public enum MonsterQuality
+    {
+        Common,      // Cap Lv. 10
+        Uncommon,    // Cap Lv. 20
+        Rare,        // Cap Lv. 30
+        Epic,        // Cap Lv. 40
+        Legendary    // Cap Lv. 50
+    }
+
     public class Monster : Character
     {
-        // ── existentes ────────────────────────────────────
-        public MonsterData Data         { get; private set; }
+        // ── PROPRIEDADES DE DADOS ─────────────────────────
+        public MonsterData Data          { get; private set; }
         public Vector3     GuardPosition { get; private set; }
+
+        [Header("Qualidade & Raridade")]
+        public MonsterQuality quality = MonsterQuality.Common;
+
+        // ── PROGRESSÃO DE NÍVEL ───────────────────────────
+        public int CurrentLevel  { get; private set; } = 1;
+        public int CurrentXP     { get; private set; } = 0;
+
+        public int MaxLevel      => GetMaxLevelForQuality();
+        public bool IsMaxLevel   => CurrentLevel >= MaxLevel;
+        public int XPToNextLevel => Data != null ? Data.GetXPRequired(CurrentLevel + 1) : GetDefaultXPForNextLevel();
+
+        // ── EVENTOS E COMPONENTES ─────────────────────────
+        public event Action<int> OnLevelUp;
+        public event Action<int> OnXPGained;
+
+        private MonsterSkillTree _skillTree;
 
         private static readonly int IsMoving    = Animator.StringToHash("isMoving");
         private static readonly int IsAttacking = Animator.StringToHash("isAttacking");
         private static readonly int IsHurt      = Animator.StringToHash("isHurt");
         private static readonly int IsDead      = Animator.StringToHash("isDead");
 
-        // ── progressão ───────────────────────────────────
-        public int CurrentLevel  { get; private set; } = 1;
-        public int CurrentXP     { get; private set; } = 0;
-        public bool IsMaxLevel   => Data != null && CurrentLevel >= Data.LevelCap;
-        public int XPToNextLevel => Data != null ? Data.GetXPRequired(CurrentLevel + 1) : 100;
+        public int CurrentLaneIndex { get; set; } = 0;
 
-        public event Action<int> OnLevelUp;
-        public event Action<int> OnXPGained;
+        // ── INICIALIZAÇÃO ─────────────────────────────────
 
-        // ── inicialização ────────────────────────────────
-
+        protected override void Awake()
+        {
+            base.Awake();
+            _skillTree = GetComponent<MonsterSkillTree>();
+        }
 
         public void Initialize(MonsterData monsterData, int level = -1, int xp = -1)
         {
             Data          = monsterData;
             GuardPosition = transform.position;
 
-            // usa parâmetros se passados explicitamente,
-            // senão restaura do MonsterData (persistido no GainXP)
             int initialLevel = level >= 1 ? level : (monsterData != null ? monsterData.currentLevel : 1);
             int initialXP    = xp    >= 0 ? xp    : (monsterData != null ? monsterData.currentXP    : 0);
 
-            CurrentLevel = Mathf.Clamp(initialLevel, 1, monsterData.LevelCap);
+            CurrentLevel = Mathf.Clamp(initialLevel, 1, MaxLevel);
             CurrentXP    = initialXP;
-            base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
+
+            if (monsterData != null)
+            {
+                base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
+            }
         }
 
-        // ── XP e Level Up ────────────────────────────────
+        // ── XP E LEVEL UP ─────────────────────────────────
 
         public void GainXP(int amount)
         {
             if (IsMaxLevel) return;
+
             CurrentXP += amount;
-            
-            // Sincroniza no Data imediatamente para garantir persistência no respawn
+
+            // Sincroniza no Data para persistência de respawn
             if (Data != null)
             {
                 Data.currentXP = CurrentXP;
@@ -57,11 +85,11 @@ namespace DungeonKeeper
 
             OnXPGained?.Invoke(CurrentXP);
 
-            // Ganho de XP em roxo suave
+            // Floating Text de XP em roxo
             Color xpColor = new Color(0.7f, 0.3f, 1f);
-            DamageTextManager.Instance?.SpawnDamageText(HeadPoint.position, $"+{amount} XP", xpColor);
+            DamageTextManager.Instance?.SpawnDamageText(HeadPoint != null ? HeadPoint.position : transform.position, $"+{amount} XP", xpColor);
 
-
+            // Loop de Level Up
             while (!IsMaxLevel && CurrentXP >= XPToNextLevel)
             {
                 CurrentXP -= XPToNextLevel;
@@ -70,27 +98,92 @@ namespace DungeonKeeper
                 if (Data != null)
                 {
                     Data.currentLevel = CurrentLevel;
-                    Data.currentXP = CurrentXP;
+                    Data.currentXP    = CurrentXP;
+                    base.Initialize(Data.GetStatsForLevel(CurrentLevel));
                 }
 
-                base.Initialize(Data.GetStatsForLevel(CurrentLevel));
+                // Notifica inscritos e a árvore de habilidades
                 OnLevelUp?.Invoke(CurrentLevel);
-                GetComponent<MonsterSkillTree>()?.OnLevelUp();
-                // Level Up em amarelo/dourado
-                DamageTextManager.Instance?.SpawnDamageText(HeadPoint.position, "LEVEL UP!", Color.yellow, 7f);
+                _skillTree?.OnLevelUp(CurrentLevel);
 
+                // Floating Text de Level Up
+                Color levelUpColor = GetQualityColor();
+                DamageTextManager.Instance?.SpawnDamageText(HeadPoint != null ? HeadPoint.position : transform.position, "LEVEL UP!", levelUpColor, 7f);
             }
         }
 
-        public MonsterSaveData GetSaveData() => new MonsterSaveData
-        {
-            id        = Data?.id,
-            currentHP = Health.CurrentHP,
-            level     = CurrentLevel,
-            xp        = CurrentXP
-        };
+        // ── REGRAS DE QUALIDADE E LIMITES ─────────────────
 
-        // ── animações — preservadas ───────────────────────
+        public int GetMaxLevelForQuality()
+        {
+            switch (quality)
+            {
+                case MonsterQuality.Common:    return 10;
+                case MonsterQuality.Uncommon:  return 20;
+                case MonsterQuality.Rare:      return 30;
+                case MonsterQuality.Epic:      return 40;
+                case MonsterQuality.Legendary: return 50;
+                default: return 10;
+            }
+        }
+
+        public Color GetQualityColor()
+        {
+            switch (quality)
+            {
+                case MonsterQuality.Common:    return Color.white;
+                case MonsterQuality.Uncommon:  return Color.green;
+                case MonsterQuality.Rare:      return new Color(0f, 0.5f, 1f);   // Azul
+                case MonsterQuality.Epic:      return new Color(0.6f, 0f, 1f);   // Roxo
+                case MonsterQuality.Legendary: return new Color(1f, 0.5f, 0f);   // Laranja
+                default: return Color.white;
+            }
+        }
+
+        private int GetDefaultXPForNextLevel()
+        {
+            float qualityXpMultiplier = GetQualityXPMultiplier();
+            int baseXP = Mathf.RoundToInt(100 * Mathf.Pow(1.2f, CurrentLevel - 1));
+            return Mathf.RoundToInt(baseXP * qualityXpMultiplier);
+        }
+
+        private float GetQualityXPMultiplier()
+        {
+            switch (quality)
+            {
+                case MonsterQuality.Common:    return 1.0f;
+                case MonsterQuality.Uncommon:  return 1.2f;
+                case MonsterQuality.Rare:      return 1.5f;
+                case MonsterQuality.Epic:      return 1.8f;
+                case MonsterQuality.Legendary: return 2.2f;
+                default: return 1.0f;
+            }
+        }
+
+        // ── SAVE SYSTEM INTEGRATION ───────────────────────
+
+        public MonsterSaveState GetSaveData()
+        {
+            MonsterSkillTree skillTree = GetComponent<MonsterSkillTree>();
+
+            return new MonsterSaveState
+            {
+                monsterID        = Data != null ? Data.id : "",
+                currentLevel     = CurrentLevel,
+                currentXP        = CurrentXP,
+                quality          = quality,
+                position         = GuardPosition,
+                laneIndex        = CurrentLaneIndex, // Incluído
+                unlockedSkillIDs = skillTree != null ? skillTree.GetUnlockedSkillIDs() : new List<string>()
+            };
+}
+        // ── ANIMAÇÕES ─────────────────────────────────────
+
+        public void SetGuardPosition(Vector3 newPosition)
+        {
+            GuardPosition = newPosition;
+            transform.position = newPosition; // Garante que ele já vá para o ponto certo
+        }
 
         protected override void OnAttack()
         {

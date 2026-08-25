@@ -1,23 +1,46 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace DungeonKeeper
 {
     [Serializable]
-    public class MonsterSaveItem
+    public class SaveData
     {
-        public string monsterID; // ID do ScriptableObject
-        public int amountOwned;  // Quantidade total comprada
+        // 💰 Economia Base
+        public int gold;
+        public int essence;
+
+        // 🧟 Monstros Ativos nas Lanes
+        public List<MonsterSaveState> activeMonsters = new List<MonsterSaveState>();
+
+        // 🎒 Inventário de Ovos e Monstros Não Equipados
+        public List<EggSaveState> eggInventory = new List<EggSaveState>();
+        public List<string> unlockedMonsterIDs = new List<string>();
+
+        // 🎨 Cosméticos / Skins
+        public List<string> unlockedSkinIDs = new List<string>();
     }
 
     [Serializable]
-    public class SaveData
+    public class MonsterSaveState
     {
-        public int gold = 100;
-        public int essence = 0;
-        public List<MonsterSaveItem> monsterInventory = new List<MonsterSaveItem>();
-        
-        // Mapeia qual monstro está em qual lane (SlotIndex -> MonsterID)
-        public Dictionary<int, string> equippedLanes = new Dictionary<int, string>();
+        public string monsterID;
+        public int currentLevel;
+        public int currentXP;
+        public MonsterQuality quality;
+
+        public Vector3 position;       // Posição 3D do monstro na cena
+        public int laneIndex = -1;     // Índice da lane onde ele estava equipado
+
+        // 🌳 IDs dos Nós da SkillTree que o monstro desbloqueou
+        public List<string> unlockedSkillIDs = new List<string>();
+    }
+
+    [Serializable]
+    public class EggSaveState
+    {
+        public string eggID;
+        public float hatchTimer; // Tempo restante de chocagem (se aplicável)
     }
 }

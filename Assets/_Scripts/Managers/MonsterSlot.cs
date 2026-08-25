@@ -102,26 +102,37 @@ namespace DungeonKeeper
         }
 
 
-        /// <summary>
-        /// Limpa o monstro do slot e cancela qualquer respawn pendente
-        /// </summary>
         public void ClearSlot()
         {
             if (_respawnCoroutine != null)
             {
-                Debug.Log($"🗑️ Cancelando respawn do monstro {EquippedMonsterData.displayName} na lane.");
                 StopCoroutine(_respawnCoroutine);
                 _respawnCoroutine = null;
             }
 
             if (_spawnedMonsterInstance != null)
             {
-                Debug.Log($"🗑️ Monstro {EquippedMonsterData.displayName} removido da lane.");
+                // Se a Healthbar do monstro for um objeto da Canvas UI gerenciado separadamente, 
+                // destrua a barra antes de destruir o monstro:
+                Monster monster = _spawnedMonsterInstance.GetComponent<Monster>();
+                if (monster != null && monster.Health != null)
+                {
+                    // Se o seu componente de Health/UI tiver um evento de limpeza ou referência da UI:
+                    // Destroy(monster.Health.HealthBarUIObject);
+                }
+
                 Destroy(_spawnedMonsterInstance);
                 _spawnedMonsterInstance = null;
             }
 
             EquippedMonsterData = null;
+        }
+
+        // Adicione este método público no final do MonsterSlot.cs:
+        public Monster GetSpawnedMonster()
+        {
+            if (_spawnedMonsterInstance == null) return null;
+            return _spawnedMonsterInstance.GetComponent<Monster>();
         }
     }
 }
