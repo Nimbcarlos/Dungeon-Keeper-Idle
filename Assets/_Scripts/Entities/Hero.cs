@@ -61,7 +61,33 @@ namespace DungeonKeeper
 
         protected override void OnDieEffect()
         {
+            base.OnDieEffect(); // Garante o cleanup de UI do Character
+
+            if (Data == null)
+            {
+                Debug.LogError($"[Hero] {gameObject.name} morreu, mas o 'Data' (HeroData) está NULL! As recompensas não foram entregues.");
+                return;
+            }
+
+            Debug.Log($"Herói '{name}' morreu. Recompensa: {Data.goldReward} Gold, {Data.essenceReward} Essência, {Data._xpReward} XP");
+
+            Treasure treasure = FindAnyObjectByType<Treasure>();
+            if (treasure != null) treasure.AddGold(Data.goldReward);
+
+            if (ResourceManager.Instance != null)
+            {
+                ResourceManager.Instance.AddEssence(Data.essenceReward);
+                ResourceManager.Instance.GrantXPToActiveMonsters(Data._xpReward);
+            }
+
+            SetState((int)CharacterState.DeathBack);
+        }
+
+        /*
+        protected override void OnDieEffect()
+        {
             if (Data == null) return;
+            Debug.Log($"Herói '{name}' morreu. Recompensa: {Data.goldReward} Gold, {Data.essenceReward} Essência, {Data._xpReward} XP");
 
             Treasure treasure = FindAnyObjectByType<Treasure>();
             if (treasure != null) treasure.AddGold(Data.goldReward);
@@ -77,6 +103,7 @@ namespace DungeonKeeper
             // Aciona o estado de Morte (DeathBack = 6 no Animator)
             SetState((int)CharacterState.DeathBack);
         }
+        */
 
         public override void Die()
         {

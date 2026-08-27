@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 namespace DungeonKeeper
@@ -23,6 +24,9 @@ namespace DungeonKeeper
         [Header("Lado Direito - Grid de Seleção")]
         [SerializeField] private Transform _gridContentParent;
         [SerializeField] private GameObject _monsterItemPrefab;
+
+        [Header("Ações do Monstro Selecionado")]
+        [SerializeField] private Button _openSkillTreeButton;
 
         private MonsterData _currentlySelectedMonster;
 
@@ -110,34 +114,63 @@ namespace DungeonKeeper
                 _monsterDisplay.DisplayMonster(monster);
             }
 
-            // Puxa o Nível e XP persistidos no ScriptableObject
             int level = monster.currentLevel;
             int xp = monster.currentXP;
             int nextLevelXP = monster.GetXPRequired(level + 1);
             bool isMaxLevel = level >= monster.LevelCap;
 
-            // USO DO VAR: O C# detecta o tipo exato retornado por GetStatsForLevel automaticamente
             var scaledStats = monster.GetStatsForLevel(level);
 
             if (_previewNameText != null) _previewNameText.text = monster.displayName;
             
-            // Exibição de Nível
             if (_previewLevelText != null) 
                 _previewLevelText.text = isMaxLevel ? $"LVL: {level} (MAX)" : $"LVL: {level}";
 
-            // Exibição do Progresso de XP
             if (_previewXpText != null) 
                 _previewXpText.text = isMaxLevel ? "XP: MAX" : $"XP: {xp} / {nextLevelXP}";
 
-            // Mapeamento dos Atributos
             if (_previewHpText != null)     _previewHpText.text = $"HP: {scaledStats.maxHP}";
             if (_previewAttackText != null) _previewAttackText.text = $"ATK: {scaledStats.attackPower}";
             if (_previewSpeedText != null)  _previewSpeedText.text = $"SPD: {scaledStats.moveSpeed}";
 
             if (_instructionText != null) 
                 _instructionText.text = "Click on a lane on the map to place this monster!";
-        }
 
+            // 🎯 1. Tenta achar o monstro instanciado em alguma lane
+            Monster activeMonster = GetActiveMonsterInstance(monster);
+
+            // 2. Tenta pegar a Tree da cena ou, se for null, pega direto do Prefab no MonsterData
+            MonsterSkillTree skillTree = activeMonster != null 
+                ? activeMonster.GetComponent<MonsterSkillTree>() 
+                : (monster != null && monster.prefab != null ? monster.prefab.GetComponent<MonsterSkillTree>() : null);
+
+            if (_openSkillTreeButton != null)
+            {
+                _openSkillTreeButton.onClick.RemoveAllListeners();
+
+                // Se o monstro (ou prefab) possui a SkillTree, HABILITA o botão
+                if (skillTree != null)
+                {
+                    _openSkillTreeButton.interactable = true;
+                    _openSkillTreeButton.onClick.AddListener(() => 
+                    {
+                        if (activeMonster != null)
+                        {
+                            UI_SkillTreeWindow.Instance?.OpenWindowForMonster(activeMonster);
+                        }
+                        else
+                        {
+                            // Passa o componente da Tree obtido via prefab/data
+                            UI_SkillTreeWindow.Instance?.OpenWindowForMonster(skillTree.GetComponent<Monster>());
+                        }
+                    });
+                }
+                else
+                {
+                    _openSkillTreeButton.interactable = false; 
+                }
+            }
+        }
 
         private void ToggleAllLaneHighlights(bool visible)
         {
@@ -159,6 +192,27 @@ namespace DungeonKeeper
                     equipped.Add(slot.EquippedMonsterData);
             }
             return equipped;
+        }
+
+        private Monster GetActiveMonsterInstance(MonsterData data)
+        {
+            if (data == null) return null;
+
+            // 1. Busca todos os slots de lanes ativos na masmorra
+            MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude);
+
+            foreach (var slot in slots)
+            {
+                // 2. Verifica se o slot possui este MonsterData equipado
+                if (slot.EquippedMonsterData == data)
+                {
+                    // 3. Retorna o componente Monster do prefab spawnado na lane
+                    return slot.GetSpawnedMonster();
+                }
+            }
+
+            // Se o monstro estiver apenas no inventário e não alocado em nenhuma lane no momento
+            return null;
         }
     }
 }

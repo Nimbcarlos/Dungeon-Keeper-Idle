@@ -43,12 +43,27 @@ namespace DungeonKeeper
 
         public int CurrentLaneIndex { get; set; } = 0;
 
+        [Header("Status de Combate Extensivos")]
+        [SerializeField] private float _critChance = 0.05f; // 5% de chance base
+        [SerializeField] private float _critDamageMultiplier = 1.5f; // 150% de dano
+
+        // Lista de comportamentos que o monstro possui (gerados via MonsterGenerator)
+        public List<BehaviorType> ActiveBehaviors { get; private set; } = new List<BehaviorType>();
+
+
+        public void SetAffixData(MonsterAffixData affixData)
+        {
+            if (affixData == null) return;
+            ActiveBehaviors = affixData.behaviors;
+        }
+
         // ── INICIALIZAÇÃO ─────────────────────────────────
 
         protected override void Awake()
         {
             base.Awake();
             _skillTree = GetComponent<MonsterSkillTree>();
+            Debug.Assert(_skillTree != null, $"Monster '{name}' não possui um componente MonsterSkillTree. Certifique-se de adicioná-lo.");
         }
 
         public void Initialize(MonsterData monsterData, int level = -1, int xp = -1)
@@ -75,6 +90,7 @@ namespace DungeonKeeper
             if (IsMaxLevel) return;
 
             CurrentXP += amount;
+            Debug.Log($"[{name}] Ganhou {amount} XP. Total atual: {CurrentXP}/{XPToNextLevel} para o próximo nível.");
 
             // Sincroniza no Data para persistência de respawn
             if (Data != null)
@@ -191,7 +207,31 @@ namespace DungeonKeeper
             Animator.SetBool(IsMoving, false);
         }
 
-        protected override void OnHit() { }
+        public void OnHitTarget(Character target, float baseDamage)
+        {
+            if (target == null || !target.IsAlive) return;
+
+            // Aplica o dano direto no Character/Health
+            target.TakeDamage(Mathf.RoundToInt(baseDamage));
+
+            // Se o alvo possui o gerenciador de status, repassa os efeitos
+            if (target.StatusEffects != null)
+            {
+                foreach (var behavior in ActiveBehaviors)
+                {
+                    switch (behavior)
+                    {
+                        case BehaviorType.StatusPoison:
+                            target.StatusEffects.ApplyPoison(baseDamage * 0.15f, 4f);
+                            break;
+
+                        case BehaviorType.StatusBurn:
+                            target.StatusEffects.ApplyBurn(baseDamage * 0.20f, 3f);
+                            break;
+                    }
+                }
+            }
+        }
 
         protected override void OnDieEffect()
         {

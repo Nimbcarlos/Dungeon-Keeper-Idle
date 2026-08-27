@@ -9,6 +9,8 @@ namespace DungeonKeeper
         [Header("Configuração do Monstro")]
         [SerializeField] private List<SkillNodeSO> _availableNodes = new List<SkillNodeSO>();
 
+
+        public List<SkillNodeSO> AvailableNodes => _availableNodes;
         private Monster _monster;
         private List<string> _unlockedNodeIDs = new List<string>();
 

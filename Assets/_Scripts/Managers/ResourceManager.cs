@@ -70,6 +70,7 @@ namespace DungeonKeeper
         {
             Monster[] activeMonsters = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);
             xpReward = amount; // Atualiza o valor de XP fixo para os monstros
+            Debug.Log($"Concedendo {amount} XP a todos os monstros ativos na cena. Total de monstros: {activeMonsters.Length}");
 
             foreach (Monster monster in activeMonsters)
             {
