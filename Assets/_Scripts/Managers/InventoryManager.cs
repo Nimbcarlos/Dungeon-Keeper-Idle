@@ -106,15 +106,18 @@ namespace DungeonKeeper
             if (targetSlot == null || monster == null) return;
 
             int owned = GetOwnedCount(monster);
-            if (owned <= 0) return; // Jogador ainda não desbloqueou este monstro
+            if (owned <= 0) return; // Jogador não possui o monstro
 
             int currentlyEquipped = GetEquippedCount(monster);
 
-            // Se o monstro já está na mesma lane que tentamos equipar, não faz nada
-            if (targetSlot.EquippedMonsterData == monster) return;
+            // Se o monstro já está NESTA MESMA lane, desequipa ele em vez de ignorar!
+            if (targetSlot.EquippedMonsterData == monster)
+            {
+                RequestUnequipMonster(targetSlot);
+                return;
+            }
 
-            // Se já atingimos o limite de cópias que o jogador possui,
-            // precisamos remover a cópia de outra lane antes de colocar na nova!
+            // Se atingiu o limite de cópias que possui, remove da lane antiga para mover para a nova
             if (currentlyEquipped >= owned)
             {
                 MonsterSlot[] allSlots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude);
@@ -122,16 +125,25 @@ namespace DungeonKeeper
                 {
                     if (slot != targetSlot && slot.EquippedMonsterData == monster)
                     {
-                        slot.ClearSlot(); // Apaga a lane anterior!
+                        slot.ClearSlot(); // Limpa o slot anterior onde ele estava
                         break;
                     }
                 }
             }
 
-            // Equipar na nova lane
+            // Equipa na nova lane
             targetSlot.EquipMonster(monster);
             OnInventoryChanged?.Invoke();
             Debug.Log($"🛡️ Monstro {monster.displayName} equipado na lane {targetSlot.name}!");
+        }
+
+        public void RequestUnequipMonster(MonsterSlot targetSlot)
+        {
+            if (targetSlot == null || !targetSlot.HasMonsterEquipped) return;
+
+            Debug.Log($"🗑️ Monstro {targetSlot.EquippedMonsterData.displayName} removido da lane {targetSlot.name}!");
+            targetSlot.ClearSlot();
+            OnInventoryChanged?.Invoke();
         }
     }
 }

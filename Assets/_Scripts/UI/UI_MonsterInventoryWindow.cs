@@ -69,13 +69,65 @@ namespace DungeonKeeper
         {
             if (_currentlySelectedMonster == null || targetSlot == null) return;
 
+            // 1. Repassa a tentativa para o InventoryManager
             InventoryManager.Instance?.RequestEquipMonster(targetSlot, _currentlySelectedMonster);
             
+            // 2. Reconstrução do Grid e da Seleção
             List<MonsterData> availableMonsters = InventoryManager.Instance != null 
                 ? InventoryManager.Instance.GetUnlockedMonstersList() 
                 : new List<MonsterData>();
 
             PopulateGrid(availableMonsters.ToArray());
+
+            // 3. Força a atualização do painel do monstro selecionado (para reabilitar a Skill Tree/botões)
+            SelectMonster(_currentlySelectedMonster);
+        }
+        /*
+        public void AssignSelectedMonsterToLane(MonsterSlot targetSlot)
+        {
+            if (_currentlySelectedMonster == null || targetSlot == null) return;
+
+            // CENÁRIO 1: O monstro selecionado JÁ ESTÁ exatamente nesta lane -> DESEQUIPA
+            if (targetSlot.HasMonsterEquipped && targetSlot.EquippedMonsterData == _currentlySelectedMonster)
+            {
+                InventoryManager.Instance?.RequestUnequipMonster(targetSlot);
+            }
+            // CENÁRIO 2: A lane está VAZIA -> EQUIPA o monstro selecionado
+            else if (!targetSlot.HasMonsterEquipped)
+            {
+                InventoryManager.Instance?.RequestEquipMonster(targetSlot, _currentlySelectedMonster);
+            }
+            // CENÁRIO 3: A lane está ocupada por OUTRO monstro -> FAZ O REPLACE
+            else
+            {
+                InventoryManager.Instance?.RequestEquipMonster(targetSlot, _currentlySelectedMonster);
+            }
+            
+            // Atualiza a lista visual do grid
+            List<MonsterData> availableMonsters = InventoryManager.Instance != null 
+                ? InventoryManager.Instance.GetUnlockedMonstersList() 
+                : new List<MonsterData>();
+
+            PopulateGrid(availableMonsters.ToArray());
+
+            // Mantém o painel do monstro atualizado
+            SelectMonster(_currentlySelectedMonster);
+        }
+        */
+
+        /// <summary>
+        /// Permite que scripts externos (como MonsterSlot ou Monster) selecionem o monstro diretamente na UI.
+        /// </summary>
+        public void SelectMonsterByData(MonsterData monsterData)
+        {
+            if (monsterData == null) return;
+
+            if (!IsOpen)
+            {
+                OpenWindow();
+            }
+
+            SelectMonster(monsterData);
         }
 
         public void CloseWindow()

@@ -12,10 +12,14 @@ namespace DungeonKeeper
 
         public List<SkillNodeSO> AvailableNodes => _availableNodes;
         private Monster _monster;
-        private List<string> _unlockedNodeIDs = new List<string>();
+        private List<string> _unlockedSkillIDs = new List<string>();
 
         public int AvailableSkillPoints { get; private set; }
+
         public event Action OnSkillTreeUpdated;
+        // 🎯 DECLARE ESTA LINHA SE ELA NÃO EXISTIR:
+
+        private MonsterData _data;
 
         private void Awake()
         {
@@ -45,7 +49,7 @@ namespace DungeonKeeper
         private int GetSpentPoints()
         {
             int spent = 0;
-            foreach (string id in _unlockedNodeIDs)
+            foreach (string id in _unlockedSkillIDs)
             {
                 SkillNodeSO node = _availableNodes.Find(n => n.skillID == id);
                 if (node != null) spent += node.skillPointCost;
@@ -53,24 +57,57 @@ namespace DungeonKeeper
             return spent;
         }
 
-        public bool CanUnlockNode(SkillNodeSO node)
+
+        public void InitializeTree(MonsterData data)
         {
-            if (node == null || _unlockedNodeIDs.Contains(node.skillID)) return false;
-            if (_monster.CurrentLevel < node.requiredMonsterLevel) return false;
-            if (AvailableSkillPoints < node.skillPointCost) return false;
+            _data = data;
+            ApplySkillModifiers();
+        }
 
-            // Verifica se o nó pré-requisito foi comprado
-            if (node.requiredParentSkill != null && !_unlockedNodeIDs.Contains(node.requiredParentSkill.skillID))
-                return false;
+        public bool CanUnlockNode(SkillNodeSO node, MonsterData data)
+        {
+            // 1. Validações básicas de referência
+            if (node == null || data == null) return false;
 
-            return true;
+            if (data.unlockedSkillIDs == null)
+                data.unlockedSkillIDs = new List<string>();
+
+            // 2. Pontos e Nível vindos diretamente do MonsterData
+            int currentLevel = data.currentLevel;
+            int unspentPoints = data.GetAvailablePoints();
+
+            // 3. Requisitos base (Nível, Pontos e não comprado)
+            bool hasEnoughLevel = currentLevel >= node.requiredMonsterLevel;
+            bool hasSkillPoints = unspentPoints >= node.skillPointCost;
+            bool notAlreadyUnlocked = !data.unlockedSkillIDs.Contains(node.skillID);
+
+            // 4. Trava de Exclusão Mútua: Checa se a opção rival da mesma linha JÁ foi comprada
+            bool mutuallyExclusiveNotUnlocked = true;
+            if (node.mutuallyExclusiveSkill != null)
+            {
+                mutuallyExclusiveNotUnlocked = !data.unlockedSkillIDs.Contains(node.mutuallyExclusiveSkill.skillID);
+            }
+
+            // 5. Valida a habilidade pré-requisito (Pai)
+            bool parentRequirementMet = true;
+            if (node.requiredParentSkill != null)
+            {
+                parentRequirementMet = data.unlockedSkillIDs.Contains(node.requiredParentSkill.skillID);
+            }
+
+            // Retorna true apenas se TODAS as condições forem atendidas
+            return hasEnoughLevel && 
+                hasSkillPoints && 
+                notAlreadyUnlocked && 
+                mutuallyExclusiveNotUnlocked && 
+                parentRequirementMet;
         }
 
         public bool TryUnlockNode(SkillNodeSO node)
         {
-            if (!CanUnlockNode(node)) return false;
+            if (!CanUnlockNode(node, _data)) return false;
 
-            _unlockedNodeIDs.Add(node.skillID);
+            _unlockedSkillIDs.Add(node.skillID);
             RecalculateAvailablePoints();
             ApplySkillModifiers();
 
@@ -84,7 +121,7 @@ namespace DungeonKeeper
             if (_monster == null) return;
 
             // Aqui você recarrega os status base do nível e soma os bônus ativados da SkillTree
-            foreach (string id in _unlockedNodeIDs)
+            foreach (string id in _unlockedSkillIDs)
             {
                 SkillNodeSO node = _availableNodes.Find(n => n.skillID == id);
                 if (node == null) continue;
@@ -105,18 +142,23 @@ namespace DungeonKeeper
 
         public List<string> GetUnlockedSkillIDs()
         {
-            return new List<string>(_unlockedNodeIDs);
+            return new List<string>(_unlockedSkillIDs);
         }
 
         public void RestoreSkills(List<string> savedSkillIDs)
         {
             if (savedSkillIDs == null) return;
 
-            _unlockedNodeIDs = new List<string>(savedSkillIDs);
+            _unlockedSkillIDs = new List<string>(savedSkillIDs);
             RecalculateAvailablePoints();
             ApplySkillModifiers();
             
             OnSkillTreeUpdated?.Invoke();
+        }
+        public bool IsNodeUnlocked(string skillID)
+        {
+            if (string.IsNullOrEmpty(skillID)) return false;
+            return _unlockedSkillIDs != null && _unlockedSkillIDs.Contains(skillID);
         }
     }
 }

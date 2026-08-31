@@ -20,7 +20,11 @@ namespace DungeonKeeper
 
         private void OnMouseDown()
         {
-            OnClickSlot();
+            // Se a janela do inventário estiver aberta, repassa a atribuição do monstro selecionado
+            if (UI_MonsterInventoryWindow.Instance != null && UI_MonsterInventoryWindow.Instance.IsOpen)
+            {
+                UI_MonsterInventoryWindow.Instance.AssignSelectedMonsterToLane(this);
+            }
         }
 
         public void OnClickSlot()

@@ -35,6 +35,7 @@ namespace DungeonKeeper
         public event Action<int> OnXPGained;
 
         private MonsterSkillTree _skillTree;
+        private List<string> _unlockedSkillIDs = new List<string>();
 
         private static readonly int IsMoving    = Animator.StringToHash("isMoving");
         private static readonly int IsAttacking = Animator.StringToHash("isAttacking");
@@ -231,6 +232,24 @@ namespace DungeonKeeper
                     }
                 }
             }
+        }
+
+        // Retorna a lista de IDs para o Save System no Monster.cs
+        public List<string> GetUnlockedSkillIDs()
+        {
+            return _unlockedSkillIDs ?? new List<string>();
+        }
+
+        // Carrega os IDs ao restaurar o Save
+        public void SetUnlockedSkillIDs(List<string> unlockedIDs)
+        {
+            _unlockedSkillIDs = unlockedIDs ?? new List<string>();
+        }
+
+        // Verifica se um nó específico já foi comprado
+        public bool IsNodeUnlocked(string skillID)
+        {
+            return _unlockedSkillIDs != null && _unlockedSkillIDs.Contains(skillID);
         }
 
         protected override void OnDieEffect()

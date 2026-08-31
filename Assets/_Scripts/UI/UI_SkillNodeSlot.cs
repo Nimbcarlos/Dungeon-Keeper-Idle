@@ -9,7 +9,7 @@ namespace DungeonKeeper
         [Header("Referências da UI")]
         [SerializeField] private Image _iconImage;
         [SerializeField] private Button _nodeButton;
-        [SerializeField] private Image _frameBorder;
+        [SerializeField] private Image _frameImage;
         [SerializeField] private TextMeshProUGUI _levelRequirementText;
 
         [Header("Cores dos Estados")]
@@ -20,36 +20,28 @@ namespace DungeonKeeper
         public SkillNodeSO NodeData { get; private set; }
         private MonsterSkillTree _currentTree;
 
-        public void Setup(SkillNodeSO node, MonsterSkillTree tree, bool isUnlocked, bool canUnlock)
+        public void Setup(SkillNodeSO node, bool isUnlocked, bool isBlockedByOpposite)
         {
-            NodeData = node;
-            _currentTree = tree;
+            _iconImage.sprite = node.icon;
 
-            if (_iconImage != null && node.icon != null)
-                _iconImage.sprite = node.icon;
-
-            if (_levelRequirementText != null)
-                _levelRequirementText.text = $"Lv.{node.requiredMonsterLevel}";
-
-            // Atualiza o visual do frame baseado no estado
             if (isUnlocked)
             {
-                _frameBorder.color = _unlockedColor;
-                _nodeButton.interactable = true;
+                // ✅ Já Comprado: Fica bem visível / Borda Dourada ou Verde
+                _frameImage.color = Color.green;
+                _iconImage.color = Color.white;
             }
-            else if (canUnlock)
+            else if (isBlockedByOpposite)
             {
-                _frameBorder.color = _availableColor;
-                _nodeButton.interactable = true;
+                // ❌ Descartado (Escolheu a outra opção): Escuro / Cinza Transparente
+                _frameImage.color = Color.gray;
+                _iconImage.color = new Color(0.3f, 0.3f, 0.3f, 0.5f); // Opaco / Desativado
             }
             else
             {
-                _frameBorder.color = _lockedColor;
-                _nodeButton.interactable = false;
+                // 🔓 Disponível para compra: Cor Normal
+                _frameImage.color = Color.white;
+                _iconImage.color = Color.white;
             }
-
-            _nodeButton.onClick.RemoveAllListeners();
-            _nodeButton.onClick.AddListener(OnClickNode);
         }
 
         private void OnClickNode()

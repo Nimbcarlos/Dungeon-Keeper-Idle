@@ -23,7 +23,7 @@ namespace DungeonKeeper
             // Se o monstro já está em uso, bloqueia a interação do botão
             if (_itemButton != null)
             {
-                _itemButton.interactable = !isEquipped;
+                _itemButton.interactable = true; // Sempre interativo, mas você pode adicionar lógica para desativar se necessário
                 _itemButton.onClick.RemoveAllListeners();
                 _itemButton.onClick.AddListener(() => onClickCallback?.Invoke(_data));
             }

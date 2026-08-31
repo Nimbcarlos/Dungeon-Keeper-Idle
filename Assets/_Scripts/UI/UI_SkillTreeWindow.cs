@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 
 namespace DungeonKeeper
@@ -19,14 +18,14 @@ namespace DungeonKeeper
 
         [Header("Container dos Nós")]
         [SerializeField] private Transform _nodesContainer;
-        [SerializeField] private GameObject _nodePrefab;
+        [SerializeField] private GameObject _rowPrefab; // 🎯 AGORA APONTA PARA O PREFAB DA LINHA (UI_SkillRowSlot)
 
         [Header("Botões de Ação")]
-        [SerializeField] private Button _closeButton;
+        [SerializeField] private GameObject _closeButton;
 
         private Monster _selectedMonster;
         private MonsterSkillTree _selectedSkillTree;
-        private List<UI_SkillNodeSlot> _instantiatedSlots = new List<UI_SkillNodeSlot>();
+        private List<UI_SkillRowSlot> _instantiatedRows = new List<UI_SkillRowSlot>();
 
         public bool IsOpen => _windowPanel != null && _windowPanel.activeSelf;
 
@@ -35,15 +34,11 @@ namespace DungeonKeeper
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
 
-            if (_closeButton != null)
-                _closeButton.onClick.AddListener(CloseWindow);
-
             CloseWindow();
         }
 
         public void OpenWindowForMonster(Monster monster)
         {
-            Debug.Log($"Abrindo janela de Skill Tree para o monstro: {monster.name}");
             if (monster == null) return;
 
             _selectedMonster = monster;
@@ -55,7 +50,6 @@ namespace DungeonKeeper
                 return;
             }
 
-            // Inscreve no evento de atualização da árvore do monstro
             _selectedSkillTree.OnSkillTreeUpdated += RefreshUI;
 
             _windowPanel.SetActive(true);
@@ -80,7 +74,7 @@ namespace DungeonKeeper
         {
             if (_selectedMonster == null || _selectedSkillTree == null) return;
 
-            // 1. Atualiza cabeçalho com dados do monstro
+            // 1. Atualiza dados do cabeçalho
             if (_monsterNameText != null) 
                 _monsterNameText.text = _selectedMonster.Data != null ? _selectedMonster.Data.displayName : _selectedMonster.name;
 
@@ -90,32 +84,31 @@ namespace DungeonKeeper
             if (_skillPointsText != null) 
                 _skillPointsText.text = $"Pontos Disponíveis: {_selectedSkillTree.AvailableSkillPoints}";
 
-            // 2. Limpa slots antigos da UI
-            foreach (var slot in _instantiatedSlots)
+            // 2. Limpa linhas antigas da UI
+            foreach (var row in _instantiatedRows)
             {
-                if (slot != null) Destroy(slot.gameObject);
+                if (row != null) Destroy(row.gameObject);
             }
-            _instantiatedSlots.Clear();
+            _instantiatedRows.Clear();
 
-            // 3. Popula os nós configurados na SkillTree
-            // Busca os nós disponíveis do componente MonsterSkillTree
+            // 3. Agrupa e popula os nós em pares/linhas
             List<SkillNodeSO> availableNodes = GetNodesFromTree(_selectedSkillTree);
-            List<string> unlockedIDs = _selectedSkillTree.GetUnlockedSkillIDs();
 
-            foreach (var node in availableNodes)
+            for (int i = 0; i < availableNodes.Count; i += 2)
             {
-                if (node == null) continue;
+                SkillNodeSO leftNode = availableNodes[i];
+                SkillNodeSO rightNode = (i + 1 < availableNodes.Count) ? availableNodes[i + 1] : null;
 
-                GameObject obj = Instantiate(_nodePrefab, _nodesContainer);
-                UI_SkillNodeSlot slot = obj.GetComponent<UI_SkillNodeSlot>();
+                if (leftNode == null && rightNode == null) continue;
 
-                if (slot != null)
+                // Instancia o prefab da LINHA
+                GameObject rowObj = Instantiate(_rowPrefab, _nodesContainer);
+                UI_SkillRowSlot rowSlot = rowObj.GetComponent<UI_SkillRowSlot>();
+
+                if (rowSlot != null)
                 {
-                    bool isUnlocked = unlockedIDs.Contains(node.skillID);
-                    bool canUnlock = _selectedSkillTree.CanUnlockNode(node);
-
-                    slot.Setup(node, _selectedSkillTree, isUnlocked, canUnlock);
-                    _instantiatedSlots.Add(slot);
+                    rowSlot.SetupRow(leftNode, rightNode, _selectedSkillTree);
+                    _instantiatedRows.Add(rowSlot);
                 }
             }
         }
@@ -123,8 +116,6 @@ namespace DungeonKeeper
         private List<SkillNodeSO> GetNodesFromTree(MonsterSkillTree tree)
         {
             if (tree == null) return new List<SkillNodeSO>();
-            // Método auxiliar para recuperar os nós do script
-            // Caso tenha tornado o _availableNodes público ou privado com getter
             return tree.AvailableNodes;
         }
     }

@@ -38,6 +38,7 @@ namespace DungeonKeeper
         [Header("Efeito nos Status")]
         public SkillType skillType;
         public float modifierValue; // Ex: 10 para +10 HP ou 0.15 para +15%
-
+        [Header("Regras de Escolha")]
+        public SkillNodeSO mutuallyExclusiveSkill; // O nó oposto na mesma linha (ex: Node B)
     }
 }
