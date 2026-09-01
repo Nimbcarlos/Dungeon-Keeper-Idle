@@ -18,7 +18,7 @@ namespace DungeonKeeper
 
         [Header("Container dos Nós")]
         [SerializeField] private Transform _nodesContainer;
-        [SerializeField] private GameObject _rowPrefab; // 🎯 AGORA APONTA PARA O PREFAB DA LINHA (UI_SkillRowSlot)
+        [SerializeField] private GameObject _rowPrefab; 
 
         [Header("Botões de Ação")]
         [SerializeField] private GameObject _closeButton;
@@ -39,6 +39,7 @@ namespace DungeonKeeper
 
         public void OpenWindowForMonster(Monster monster)
         {
+            Debug.Log($"[SkillTreeWindow] 1. Tentando abrir para o monstro: {(monster != null ? monster.name : "NULL")}");
             if (monster == null) return;
 
             _selectedMonster = monster;
@@ -46,10 +47,11 @@ namespace DungeonKeeper
 
             if (_selectedSkillTree == null)
             {
-                Debug.LogWarning($"O monstro {monster.name} não possui o componente MonsterSkillTree!");
+                Debug.LogWarning($"[SkillTreeWindow] ERRO: O monstro {monster.name} NÃO possui o componente MonsterSkillTree!");
                 return;
             }
 
+            _selectedSkillTree.OnSkillTreeUpdated -= RefreshUI; // Evita duplicar inscrição
             _selectedSkillTree.OnSkillTreeUpdated += RefreshUI;
 
             _windowPanel.SetActive(true);
@@ -72,17 +74,23 @@ namespace DungeonKeeper
 
         private void RefreshUI()
         {
-            if (_selectedMonster == null || _selectedSkillTree == null) return;
+            Debug.Log("[SkillTreeWindow] 2. RefreshUI chamado.");
+
+            if (_selectedMonster == null || _selectedSkillTree == null)
+            {
+                Debug.LogWarning($"[SkillTreeWindow] ERRO: _selectedMonster é {(_selectedMonster == null ? "NULL" : "OK")} ou _selectedSkillTree é {(_selectedSkillTree == null ? "NULL" : "OK")}");
+                return;
+            }
 
             // 1. Atualiza dados do cabeçalho
             if (_monsterNameText != null) 
                 _monsterNameText.text = _selectedMonster.Data != null ? _selectedMonster.Data.displayName : _selectedMonster.name;
 
             if (_monsterLevelText != null) 
-                _monsterLevelText.text = $"Nível {_selectedMonster.CurrentLevel}";
+                _monsterLevelText.text = $"Level {_selectedMonster.CurrentLevel}";
 
             if (_skillPointsText != null) 
-                _skillPointsText.text = $"Pontos Disponíveis: {_selectedSkillTree.AvailableSkillPoints}";
+                _skillPointsText.text = $"Available Points: {_selectedSkillTree.AvailableSkillPoints}";
 
             // 2. Limpa linhas antigas da UI
             foreach (var row in _instantiatedRows)
@@ -91,13 +99,35 @@ namespace DungeonKeeper
             }
             _instantiatedRows.Clear();
 
-            // 3. Agrupa e popula os nós em pares/linhas
+            // 3. Checagem de segurança do Prefab e do Container
+            if (_rowPrefab == null)
+            {
+                Debug.LogError("[SkillTreeWindow] ERRO CRÍTICO: '_rowPrefab' não foi arrastado no Inspector do UI_SkillTreeWindow!");
+                return;
+            }
+
+            if (_nodesContainer == null)
+            {
+                Debug.LogError("[SkillTreeWindow] ERRO CRÍTICO: '_nodesContainer' não foi arrastado no Inspector do UI_SkillTreeWindow!");
+                return;
+            }
+
+            // 4. Agrupa e popula os nós
             List<SkillNodeSO> availableNodes = GetNodesFromTree(_selectedSkillTree);
+            Debug.Log($"[SkillTreeWindow] 3. Total de nós encontrados na Tree: {(availableNodes != null ? availableNodes.Count : 0)}");
+
+            if (availableNodes == null || availableNodes.Count == 0)
+            {
+                Debug.LogWarning("[SkillTreeWindow] A lista AvailableNodes da MonsterSkillTree está VAZIA! Adicione os SO_SkillNode no Inspector do Monstro/Data.");
+                return;
+            }
 
             for (int i = 0; i < availableNodes.Count; i += 2)
             {
                 SkillNodeSO leftNode = availableNodes[i];
                 SkillNodeSO rightNode = (i + 1 < availableNodes.Count) ? availableNodes[i + 1] : null;
+
+                Debug.Log($"[SkillTreeWindow] 4. Processando Linha {i / 2}: Esquerda = {(leftNode != null ? leftNode.skillName : "NULL")}, Direita = {(rightNode != null ? rightNode.skillName : "NULL")}");
 
                 if (leftNode == null && rightNode == null) continue;
 
@@ -107,8 +137,14 @@ namespace DungeonKeeper
 
                 if (rowSlot != null)
                 {
+                    Debug.Log($"[SkillTreeWindow] 5. UI_SkillRowSlot encontrado no Prefab! Chamando SetupRow...");
                     rowSlot.SetupRow(leftNode, rightNode, _selectedSkillTree);
+                    Debug.LogWarning($"{leftNode}, {rightNode}, {_selectedSkillTree}");
                     _instantiatedRows.Add(rowSlot);
+                }
+                else
+                {
+                    Debug.LogError($"[SkillTreeWindow] ERRO CRÍTICO: O Prefab '{_rowPrefab.name}' foi instanciado, mas NÃO tem o componente 'UI_SkillRowSlot' anexado na raiz dele!");
                 }
             }
         }

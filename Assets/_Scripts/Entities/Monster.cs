@@ -78,6 +78,28 @@ namespace DungeonKeeper
             CurrentLevel = Mathf.Clamp(initialLevel, 1, MaxLevel);
             CurrentXP    = initialXP;
 
+            // Configura o tipo de ataque de acordo com o MonsterData
+            if (monsterData.attackType == AttackType.Ranged)
+            {
+                ProjectileSkill rangedSkill = gameObject.GetComponent<ProjectileSkill>();
+                if (rangedSkill == null) rangedSkill = gameObject.AddComponent<ProjectileSkill>();
+                
+                // Garante que o Melee esteja desativado se for Ranged
+                MeleeSkill melee = GetComponent<MeleeSkill>();
+                if (melee != null) Destroy(melee);
+            }
+            else if (monsterData.attackType == AttackType.Melee)
+            {
+                MeleeSkill meleeSkill = gameObject.GetComponent<MeleeSkill>();
+                if (meleeSkill == null) meleeSkill = gameObject.AddComponent<MeleeSkill>();
+                
+                meleeSkill.Initialize(monsterData.meleeData);
+
+                // Garante que o Ranged esteja desativado se for Melee
+                ProjectileSkill ranged = GetComponent<ProjectileSkill>();
+                if (ranged != null) Destroy(ranged);
+            }
+
             if (monsterData != null)
             {
                 base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
