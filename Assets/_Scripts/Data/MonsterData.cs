@@ -1,201 +1,3 @@
-/*
-using UnityEngine;
-using System.Collections.Generic;
-
-namespace DungeonKeeper
-{
-    public enum RewardType
-    {
-        ModifierChoice, // Escolha de status base (+10% Crit vs +5% Life Leech)
-        SkillUnlock,    // Nova habilidade ativa
-        SkillUpgrade,   // Upgrade de skill existente
-        PassiveChoice   // Passiva do monstro
-    }
-
-    public enum MonsterBehavior
-    {
-        Defensive,
-        Aggressive,
-        Ranged,
-        Support,
-        Custom
-    }
-
-    public enum MonsterRarity
-    {
-        Normal,
-        Uncommon,
-        Rare,
-        Epic,
-        Legendary
-    }
-
-    public enum AttackType
-    {
-        Melee,
-        Ranged
-    }
-
-    [System.Serializable]
-    public class LevelRewardRow
-    {
-        public int levelUnlocked;
-        public SkillNodeSO leftOption;
-        public SkillNodeSO rightOption;
-        public string chosenOptionID;
-
-        public bool IsClaimed => !string.IsNullOrEmpty(chosenOptionID);
-    }
-
-    [CreateAssetMenu(fileName = "MonsterData", menuName = "Dungeon/Monster Data")]
-    public class MonsterData : ScriptableObject
-    {
-        [Header("Identificação")]
-        public string id;
-        public string displayName;
-        public Sprite icon;
-        public GameObject prefab;
-
-        [Header("Raridade")]
-        public MonsterRarity rarity = MonsterRarity.Normal;
-
-        [Header("Tipo de Ataque")]
-        public AttackType attackType = AttackType.Melee;
-
-        [Header("Configurações de Ataque (SOs)")]
-        public ProjectileData projectileData;
-        public MeleeSkillData meleeData;
-
-        [Header("Progressão de Nível (Dados)")]
-        public int currentLevel = 1;
-        public int currentXP = 0;
-        public int maxLevel = 25;
-
-        public int SkillSlots => (int)rarity + 1;
-
-        public int LevelCap => rarity switch
-        {
-            MonsterRarity.Normal    => 10,
-            MonsterRarity.Uncommon  => 20,
-            MonsterRarity.Rare      => 30,
-            MonsterRarity.Epic      => 40,
-            MonsterRarity.Legendary => 50,
-            _                       => 10
-        };
-
-        [Header("Stats Base")]
-        public Stats stats;
-
-        [Header("Crescimento por Nível")]
-        public int hpPerLevel = 10;
-        public int attackPerLevel = 2;
-        public float speedPerLevel = 0f;
-
-        [Header("XP")]
-        public int baseXPRequired = 100;
-        public float xpGrowthRate = 1.5f;
-
-        [Header("Comportamento")]
-        public MonsterBehavior defaultBehavior = MonsterBehavior.Defensive;
-
-        [Header("Loot")]
-        public int goldReward = 5;
-        public int essenceReward = 1;
-
-        [Header("Pool Global de Nós para Sorteio")]
-        public List<SkillNodeSO> globalSkillPool = new List<SkillNodeSO>();
-
-        [Header("Registro de Recompensas por Linha (Sorteados x Escolhidos)")]
-        public List<LevelRewardRow> rewardRows = new List<LevelRewardRow>();
-
-        [Header("Árvore de Habilidades (Dados)")]
-        public List<SkillNodeSO> availableSkills = new List<SkillNodeSO>();
-        public List<string> unlockedSkillIDs = new List<string>();
-
-        // ── LÓGICA DE GERAMENTO E SELEÇÃO DE RECOMPENSAS ──
-
-        /// <summary>
-        /// Garante a geração fixada das ofertas para os níveis alcançados do monstro.
-        /// </summary>
-        public void EnsureAvailableSkillsPopulated()
-        {
-            if (globalSkillPool == null || globalSkillPool.Count < 2) return;
-
-            if (rewardRows == null) rewardRows = new List<LevelRewardRow>();
-
-            // Gera pares sorteados fixos até o nível máximo do monstro
-            for (int lvl = 2; lvl <= maxLevel; lvl++)
-            {
-                if (!rewardRows.Exists(r => r.levelUnlocked == lvl))
-                {
-                    var (left, right) = GetRandomRewardPair(globalSkillPool);
-                    if (left != null && right != null)
-                    {
-                        // Garante que a exigência de nível do nó corresponda ao nível da linha
-                        left.requiredMonsterLevel = lvl;
-                        right.requiredMonsterLevel = lvl;
-
-                        rewardRows.Add(new LevelRewardRow
-                        {
-                            levelUnlocked = lvl,
-                            leftOption = left,
-                            rightOption = right,
-                            chosenOptionID = string.Empty
-                        });
-                    }
-                }
-            }
-        }
-
-        private (SkillNodeSO left, SkillNodeSO right) GetRandomRewardPair(List<SkillNodeSO> pool)
-        {
-            List<SkillNodeSO> available = new List<SkillNodeSO>(pool);
-            int idx1 = Random.Range(0, available.Count);
-            SkillNodeSO left = available[idx1];
-            available.RemoveAt(idx1);
-
-            int idx2 = Random.Range(0, available.Count);
-            SkillNodeSO right = available[idx2];
-
-            return (left, right);
-        }
-
-        public bool IsLevelRewardClaimed(int level)
-        {
-            var row = rewardRows.Find(r => r.levelUnlocked == level);
-            return row != null && row.IsClaimed;
-        }
-
-        public bool IsSkillUnlocked(string skillID)
-        {
-            return unlockedSkillIDs != null && unlockedSkillIDs.Contains(skillID);
-        }
-
-        public int GetAvailablePoints()
-        {
-            int totalEarned = Mathf.Max(0, currentLevel - 1);
-            int spent = unlockedSkillIDs != null ? unlockedSkillIDs.Count : 0;
-            return Mathf.Max(0, totalEarned - spent);
-        }
-
-        public int GetXPRequired(int level)
-        {
-            return Mathf.RoundToInt(baseXPRequired * Mathf.Pow(xpGrowthRate, level - 1));
-        }
-
-        public Stats GetStatsForLevel(int level)
-        {
-            Stats s = stats.Clone();
-            int bonus = level - 1;
-            s.maxHP += hpPerLevel * bonus;
-            s.attackPower += attackPerLevel * bonus;
-            s.moveSpeed += speedPerLevel * bonus;
-            return s;
-        }
-    }
-}
-*/
-
 using UnityEngine;
 using System.Collections.Generic;
 using DungeonKeeper;
@@ -431,5 +233,35 @@ namespace DungeonKeeper
             s.moveSpeed   += speedPerLevel  * bonus;
             return s;
         }
+
+        public void ClaimReward(int level, SkillNodeSO chosenNode)
+        {
+            if (chosenNode == null) return;
+
+            if (unlockedSkillIDs == null) unlockedSkillIDs = new List<string>();
+            if (claimedRewards == null) claimedRewards = new List<ClaimedReward>();
+
+            // 1. Registra o ID para consultas de exclusão e UI
+            if (!unlockedSkillIDs.Contains(chosenNode.skillID))
+            {
+                unlockedSkillIDs.Add(chosenNode.skillID);
+            }
+
+            // 2. Salva o marco do nível como reivindicado
+            ClaimedReward reward = claimedRewards.Find(r => r.levelUnlocked == level);
+            if (reward == null)
+            {
+                claimedRewards.Add(new ClaimedReward
+                {
+                    levelUnlocked = level,
+                    chosenOptionID = chosenNode.skillID
+                });
+            }
+            else
+            {
+                reward.chosenOptionID = chosenNode.skillID;
+            }
+        }
+
     }
 }

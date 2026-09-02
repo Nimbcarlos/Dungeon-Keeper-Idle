@@ -188,26 +188,6 @@ namespace DungeonKeeper
             return _data.GetAvailablePoints() >= clickedNode.skillPointCost;
         }
 
-        public void ApplySkillModifiers()
-        {
-            if (_monster == null) return;
-
-            List<SkillNodeSO> nodes = AvailableNodes;
-
-            foreach (string id in _unlockedSkillIDs)
-            {
-                SkillNodeSO node = nodes.Find(n => n != null && n.skillID == id);
-                if (node == null) continue;
-
-                switch (node.skillType)
-                {
-                    case SkillType.FlatHealth:
-                        _monster.Health?.ModifyMaxHealth(node.modifierValue);
-                        break;
-                }
-            }
-        }
-
         public List<string> GetUnlockedSkillIDs()
         {
             return new List<string>(_unlockedSkillIDs);
@@ -229,5 +209,88 @@ namespace DungeonKeeper
             if (string.IsNullOrEmpty(skillID)) return false;
             return _unlockedSkillIDs != null && _unlockedSkillIDs.Contains(skillID);
         }
+
+        public void ApplySkillModifiers()
+        {
+            if (_monster == null || _data == null) return;
+
+            // Reseta o cálculo base dos atributos do nível antes de aplicar os bônus acumulados
+            // Em algumas versões do Monster, esse método pode não existir. Então usamos reflection
+            // para manter compatibilidade sem quebrar a compilação.
+            TryRecalculateBaseStats(_monster);
+
+            foreach (string skillID in _data.unlockedSkillIDs)
+            {
+                SkillNodeSO node = _data.availableSkills.Find(n => n != null && n.skillID == skillID);
+                if (node == null) continue;
+
+                // 🎯 APLICA O IMPACTO DE ACORDO COM O TIPO DE RECOMPENSA (RewardType)
+                switch (node.rewardType)
+                {
+                    case RewardType.ModifierChoice:
+                        ApplyStatusModifier(node);
+                        break;
+
+                    case RewardType.SkillUpgrade:
+                        ApplyCombatSkillUpgrade(node);
+                        break;
+
+                    case RewardType.SkillUnlock:
+                        // Habilita uma nova habilidade ativa no monstro
+                        break;
+                }
+            }
+        }
+
+        private void TryRecalculateBaseStats(Monster monster)
+        {
+            if (monster == null) return;
+
+            var method = monster.GetType().GetMethod(
+                "RecalculateBaseStats",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic);
+
+            if (method != null)
+            {
+                method.Invoke(monster, null);
+            }
+        }
+
+        private void ApplyStatusModifier(SkillNodeSO node)
+        {
+            switch (node.skillType)
+            {
+                case SkillType.FlatHealth:
+                    _monster.Health?.ModifyMaxHealth(node.modifierValue);
+                    break;
+
+                case SkillType.PercentDamage:
+                    _monster.Stats.attackPower += Mathf.RoundToInt(_monster.Stats.attackPower * (node.modifierValue / 100f));
+                    break;
+
+                case SkillType.AttackSpeed:
+                    _monster.Stats.attackSpeed += node.modifierValue;
+                    break;
+            }
+        }
+
+        private void ApplyCombatSkillUpgrade(SkillNodeSO node)
+        {
+            // Se o monstro for Melee, injeta o bônus direto na habilidade Melee
+            MeleeSkill melee = GetComponent<MeleeSkill>();
+            if (melee != null)
+            {
+                // Exemplo: node.modifierValue adiciona dano extra ou alcance
+                melee.ApplyUpgradeBonus(
+                    extraDamage: Mathf.RoundToInt(node.modifierValue), 
+                    extraRange: 0f, 
+                    extraCleave: 0, 
+                    cdr: 0f
+                );
+            }
+        }
+
     }
 }
