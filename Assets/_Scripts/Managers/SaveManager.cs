@@ -69,8 +69,8 @@ namespace DungeonKeeper
 
             // 🎯 Mesma ordenação exata usada no SaveGame
             MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude)
-                                  .OrderBy(s => s.gameObject.name)
-                                  .ToArray();
+                                .OrderBy(s => s.gameObject.name)
+                                .ToArray();
 
             // 1. Limpa TODOS os slots existentes antes de restaurar o save
             foreach (var slot in slots)
@@ -93,10 +93,21 @@ namespace DungeonKeeper
                 if (monster != null)
                 {
                     monster.quality = state.quality;
-                    monster.Initialize(data, state.currentLevel, state.currentXP);
 
+                    // 🎯 1. Monta o objeto de progressão individual vindo dos dados do save
+                    MonsterProgression progression = new MonsterProgression
+                    {
+                        currentLevel = state.currentLevel,
+                        currentXP = state.currentXP,
+                        unlockedSkillIDs = state.unlockedSkillIDs != null ? new System.Collections.Generic.List<string>(state.unlockedSkillIDs) : new System.Collections.Generic.List<string>()
+                    };
+
+                    // 🎯 2. Inicializa o monstro com seu Data e sua Progression de runtime
+                    monster.InitializeMonster(data, progression);
+
+                    // 🎯 3. Restaura as habilidades passando a instância de MonsterProgression criada
                     MonsterSkillTree tree = monster.GetComponent<MonsterSkillTree>();
-                    tree?.RestoreSkills(state.unlockedSkillIDs);
+                    tree?.RestoreSkills(progression);
                 }
             }
         }

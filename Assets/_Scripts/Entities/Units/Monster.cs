@@ -16,18 +16,19 @@ namespace DungeonKeeper
     public class Monster : Character
     {
         // ── PROPRIEDADES DE DADOS ─────────────────────────
-        public MonsterData Data          { get; private set; }
-        public Vector3     GuardPosition { get; private set; }
+        public MonsterData Data { get; private set; }
+        public MonsterProgression Progression { get; private set; } // 🎯 FIX: Declarada a propriedade Progression
+        public Vector3 GuardPosition { get; private set; }
 
         [Header("Qualidade & Raridade")]
         public MonsterQuality quality = MonsterQuality.Common;
 
-        // ── PROGRESSÃO DE NÍVEL ───────────────────────────
-        public int CurrentLevel  { get; private set; } = 1;
-        public int CurrentXP     { get; private set; } = 0;
+        // ── PROGRESSÃO DE NÍVEL (Ponteiros para o objeto Progression) ───────────────────────────
+        public int CurrentLevel => Progression != null ? Progression.currentLevel : 1;
+        public int CurrentXP => Progression != null ? Progression.currentXP : 0;
 
-        public int MaxLevel      => GetMaxLevelForQuality();
-        public bool IsMaxLevel   => CurrentLevel >= MaxLevel;
+        public int MaxLevel => GetMaxLevelForQuality();
+        public bool IsMaxLevel => CurrentLevel >= MaxLevel;
         public int XPToNextLevel => Data != null ? Data.GetXPRequired(CurrentLevel + 1) : GetDefaultXPForNextLevel();
 
         // ── EVENTOS E COMPONENTES ─────────────────────────
@@ -35,22 +36,19 @@ namespace DungeonKeeper
         public event Action<int> OnXPGained;
 
         private MonsterSkillTree _skillTree;
-        private List<string> _unlockedSkillIDs = new List<string>();
 
-        private static readonly int IsMoving    = Animator.StringToHash("isMoving");
+        private static readonly int IsMoving = Animator.StringToHash("isMoving");
         private static readonly int IsAttacking = Animator.StringToHash("isAttacking");
-        private static readonly int IsHurt      = Animator.StringToHash("isHurt");
-        private static readonly int IsDead      = Animator.StringToHash("isDead");
+        private static readonly int IsHurt = Animator.StringToHash("isHurt");
+        private static readonly int IsDead = Animator.StringToHash("isDead");
 
         public int CurrentLaneIndex { get; set; } = 0;
 
         [Header("Status de Combate Extensivos")]
-        [SerializeField] private float _critChance = 0.05f; // 5% de chance base
-        [SerializeField] private float _critDamageMultiplier = 1.5f; // 150% de dano
+        [SerializeField] private float _critChance = 0.05f;
+        [SerializeField] private float _critDamageMultiplier = 1.5f;
 
-        // Lista de comportamentos que o monstro possui (gerados via MonsterGenerator)
         public List<BehaviorType> ActiveBehaviors { get; private set; } = new List<BehaviorType>();
-
 
         public void SetAffixData(MonsterAffixData affixData)
         {
@@ -67,24 +65,58 @@ namespace DungeonKeeper
             Debug.Assert(_skillTree != null, $"Monster '{name}' não possui um componente MonsterSkillTree. Certifique-se de adicioná-lo.");
         }
 
+        public void InitializeMonster(MonsterData data, MonsterProgression progression = null)
+        {
+            Data = data;
+            Progression = progression ?? new MonsterProgression();
+
+            // Aplica os atributos base calculados para o nível individual do monstro
+            base.Initialize(data.GetStatsForLevel(Progression.currentLevel));
+
+            // Configura componentes de ataque baseados no MonsterData
+            SetupAttackComponents(data);
+
+            // Inicializa a árvore acoplando o Data (blueprint) e a Progression (instância)
+            if (_skillTree != null)
+            {
+                _skillTree.InitializeTree(Data, Progression);
+            }
+        }
+
         public void Initialize(MonsterData monsterData, int level = -1, int xp = -1)
         {
-            Data          = monsterData;
+            Data = monsterData;
             GuardPosition = transform.position;
 
-            int initialLevel = level >= 1 ? level : (monsterData != null ? monsterData.currentLevel : 1);
-            int initialXP    = xp    >= 0 ? xp    : (monsterData != null ? monsterData.currentXP    : 0);
+            if (Progression == null) Progression = new MonsterProgression();
 
-            CurrentLevel = Mathf.Clamp(initialLevel, 1, MaxLevel);
-            CurrentXP    = initialXP;
+            if (level >= 1) Progression.currentLevel = level;
+            if (xp >= 0) Progression.currentXP = xp;
 
-            // Configura o tipo de ataque de acordo com o MonsterData
+            Progression.currentLevel = Mathf.Clamp(Progression.currentLevel, 1, MaxLevel);
+
+            SetupAttackComponents(monsterData);
+
+            if (monsterData != null)
+            {
+                base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
+            }
+
+            if (_skillTree != null)
+            {
+                _skillTree.InitializeTree(Data, Progression);
+            }
+        }
+
+        private void SetupAttackComponents(MonsterData monsterData)
+        {
+            if (monsterData == null) return;
+
             if (monsterData.attackType == AttackType.Ranged)
             {
                 ProjectileSkill rangedSkill = gameObject.GetComponent<ProjectileSkill>();
                 if (rangedSkill == null) rangedSkill = gameObject.AddComponent<ProjectileSkill>();
                 
-                // Garante que o Melee esteja desativado se for Ranged
                 MeleeSkill melee = GetComponent<MeleeSkill>();
                 if (melee != null) Destroy(melee);
             }
@@ -95,14 +127,8 @@ namespace DungeonKeeper
                 
                 meleeSkill.Initialize(monsterData.meleeData);
 
-                // Garante que o Ranged esteja desativado se for Melee
                 ProjectileSkill ranged = GetComponent<ProjectileSkill>();
                 if (ranged != null) Destroy(ranged);
-            }
-
-            if (monsterData != null)
-            {
-                base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
             }
         }
 
@@ -110,42 +136,29 @@ namespace DungeonKeeper
 
         public void GainXP(int amount)
         {
-            if (IsMaxLevel) return;
+            if (IsMaxLevel || Progression == null) return;
 
-            CurrentXP += amount;
+            Progression.currentXP += amount;
             Debug.Log($"[{name}] Ganhou {amount} XP. Total atual: {CurrentXP}/{XPToNextLevel} para o próximo nível.");
-
-            // Sincroniza no Data para persistência de respawn
-            if (Data != null)
-            {
-                Data.currentXP = CurrentXP;
-                Data.currentLevel = CurrentLevel;
-            }
 
             OnXPGained?.Invoke(CurrentXP);
 
-            // Floating Text de XP em roxo
             Color xpColor = new Color(0.7f, 0.3f, 1f);
             DamageTextManager.Instance?.SpawnDamageText(HeadPoint != null ? HeadPoint.position : transform.position, $"+{amount} XP", xpColor);
 
-            // Loop de Level Up
             while (!IsMaxLevel && CurrentXP >= XPToNextLevel)
             {
-                CurrentXP -= XPToNextLevel;
-                CurrentLevel++;
+                Progression.currentXP -= XPToNextLevel;
+                Progression.currentLevel++;
 
                 if (Data != null)
                 {
-                    Data.currentLevel = CurrentLevel;
-                    Data.currentXP    = CurrentXP;
                     base.Initialize(Data.GetStatsForLevel(CurrentLevel));
                 }
 
-                // Notifica inscritos e a árvore de habilidades
                 OnLevelUp?.Invoke(CurrentLevel);
                 _skillTree?.OnLevelUp(CurrentLevel);
 
-                // Floating Text de Level Up
                 Color levelUpColor = GetQualityColor();
                 DamageTextManager.Instance?.SpawnDamageText(HeadPoint != null ? HeadPoint.position : transform.position, "LEVEL UP!", levelUpColor, 7f);
             }
@@ -172,9 +185,9 @@ namespace DungeonKeeper
             {
                 case MonsterQuality.Common:    return Color.white;
                 case MonsterQuality.Uncommon:  return Color.green;
-                case MonsterQuality.Rare:      return new Color(0f, 0.5f, 1f);   // Azul
-                case MonsterQuality.Epic:      return new Color(0.6f, 0f, 1f);   // Roxo
-                case MonsterQuality.Legendary: return new Color(1f, 0.5f, 0f);   // Laranja
+                case MonsterQuality.Rare:      return new Color(0f, 0.5f, 1f);
+                case MonsterQuality.Epic:      return new Color(0.6f, 0f, 1f);
+                case MonsterQuality.Legendary: return new Color(1f, 0.5f, 0f);
                 default: return Color.white;
             }
         }
@@ -203,25 +216,24 @@ namespace DungeonKeeper
 
         public MonsterSaveState GetSaveData()
         {
-            MonsterSkillTree skillTree = GetComponent<MonsterSkillTree>();
-
             return new MonsterSaveState
             {
-                monsterID        = Data != null ? Data.id : "",
-                currentLevel     = CurrentLevel,
-                currentXP        = CurrentXP,
-                quality          = quality,
-                position         = GuardPosition,
-                laneIndex        = CurrentLaneIndex, // Incluído
-                unlockedSkillIDs = skillTree != null ? skillTree.GetUnlockedSkillIDs() : new List<string>()
+                monsterID = Data != null ? Data.id : "",
+                currentLevel = CurrentLevel,
+                currentXP = CurrentXP,
+                quality = quality,
+                position = GuardPosition,
+                laneIndex = CurrentLaneIndex,
+                unlockedSkillIDs = _skillTree != null ? _skillTree.GetUnlockedSkillIDs() : new List<string>()
             };
-}
+        }
+
         // ── ANIMAÇÕES ─────────────────────────────────────
 
         public void SetGuardPosition(Vector3 newPosition)
         {
             GuardPosition = newPosition;
-            transform.position = newPosition; // Garante que ele já vá para o ponto certo
+            transform.position = newPosition;
         }
 
         protected override void OnAttack()
@@ -234,10 +246,8 @@ namespace DungeonKeeper
         {
             if (target == null || !target.IsAlive) return;
 
-            // Aplica o dano direto no Character/Health
             target.TakeDamage(Mathf.RoundToInt(baseDamage));
 
-            // Se o alvo possui o gerenciador de status, repassa os efeitos
             if (target.StatusEffects != null)
             {
                 foreach (var behavior in ActiveBehaviors)
@@ -256,22 +266,14 @@ namespace DungeonKeeper
             }
         }
 
-        // Retorna a lista de IDs para o Save System no Monster.cs
         public List<string> GetUnlockedSkillIDs()
         {
-            return _unlockedSkillIDs ?? new List<string>();
+            return _skillTree != null ? _skillTree.GetUnlockedSkillIDs() : new List<string>();
         }
 
-        // Carrega os IDs ao restaurar o Save
-        public void SetUnlockedSkillIDs(List<string> unlockedIDs)
-        {
-            _unlockedSkillIDs = unlockedIDs ?? new List<string>();
-        }
-
-        // Verifica se um nó específico já foi comprado
         public bool IsNodeUnlocked(string skillID)
         {
-            return _unlockedSkillIDs != null && _unlockedSkillIDs.Contains(skillID);
+            return _skillTree != null && _skillTree.IsNodeUnlocked(skillID);
         }
 
         protected override void OnDieEffect()

@@ -166,8 +166,13 @@ namespace DungeonKeeper
                 _monsterDisplay.DisplayMonster(monster);
             }
 
-            int level = monster.currentLevel;
-            int xp = monster.currentXP;
+            // 🎯 1. Tenta achar o monstro instanciado em alguma lane para ler o Nível/XP de runtime
+            Monster activeMonster = GetActiveMonsterInstance(monster);
+
+            // Se o monstro estiver ativo na cena, lê o nível/XP dele; senão assume Nível 1 e XP 0
+            int level = activeMonster != null ? activeMonster.CurrentLevel : 1;
+            int xp = activeMonster != null ? activeMonster.CurrentXP : 0;
+            
             int nextLevelXP = monster.GetXPRequired(level + 1);
             bool isMaxLevel = level >= monster.LevelCap;
 
@@ -188,10 +193,7 @@ namespace DungeonKeeper
             if (_instructionText != null) 
                 _instructionText.text = "Click on a lane on the map to place this monster!";
 
-            // 🎯 1. Tenta achar o monstro instanciado em alguma lane
-            Monster activeMonster = GetActiveMonsterInstance(monster);
-
-            // 2. Tenta pegar a Tree da cena ou, se for null, pega direto do Prefab no MonsterData
+            // 2. Configuração da SkillTree
             MonsterSkillTree skillTree = activeMonster != null 
                 ? activeMonster.GetComponent<MonsterSkillTree>() 
                 : (monster != null && monster.prefab != null ? monster.prefab.GetComponent<MonsterSkillTree>() : null);
@@ -200,21 +202,12 @@ namespace DungeonKeeper
             {
                 _openSkillTreeButton.onClick.RemoveAllListeners();
 
-                // Se o monstro (ou prefab) possui a SkillTree, HABILITA o botão
-                if (skillTree != null)
+                if (skillTree != null && activeMonster != null)
                 {
                     _openSkillTreeButton.interactable = true;
                     _openSkillTreeButton.onClick.AddListener(() => 
                     {
-                        if (activeMonster != null)
-                        {
-                            UI_SkillTreeWindow.Instance?.OpenWindowForMonster(activeMonster);
-                        }
-                        else
-                        {
-                            // Passa o componente da Tree obtido via prefab/data
-                            UI_SkillTreeWindow.Instance?.OpenWindowForMonster(skillTree.GetComponent<Monster>());
-                        }
+                        UI_SkillTreeWindow.Instance?.OpenWindowForMonster(activeMonster);
                     });
                 }
                 else

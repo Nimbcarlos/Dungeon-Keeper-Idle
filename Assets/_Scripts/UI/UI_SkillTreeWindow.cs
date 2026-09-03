@@ -112,8 +112,8 @@ namespace DungeonKeeper
                 return;
             }
 
-            // 4. Agrupa e popula os nós
-            List<SkillNodeSO> availableNodes = GetNodesFromTree(_selectedSkillTree);
+            // 4. Agrupa e popula os nós (compatível com IReadOnlyList)
+            IReadOnlyList<SkillNodeSO> availableNodes = GetNodesFromTree(_selectedSkillTree);
             Debug.Log($"[SkillTreeWindow] 3. Total de nós encontrados na Tree: {(availableNodes != null ? availableNodes.Count : 0)}");
 
             if (availableNodes == null || availableNodes.Count == 0)
@@ -139,7 +139,6 @@ namespace DungeonKeeper
                 {
                     Debug.Log($"[SkillTreeWindow] 5. UI_SkillRowSlot encontrado no Prefab! Chamando SetupRow...");
                     rowSlot.SetupRow(leftNode, rightNode, _selectedSkillTree);
-                    Debug.LogWarning($"{leftNode}, {rightNode}, {_selectedSkillTree}");
                     _instantiatedRows.Add(rowSlot);
                 }
                 else
@@ -149,9 +148,10 @@ namespace DungeonKeeper
             }
         }
 
-        private List<SkillNodeSO> GetNodesFromTree(MonsterSkillTree tree)
+        // 🎯 FIX: O tipo de retorno foi alterado para IReadOnlyList para casar com o MonsterSkillTree.cs
+        private IReadOnlyList<SkillNodeSO> GetNodesFromTree(MonsterSkillTree tree)
         {
-            if (tree == null) return new List<SkillNodeSO>();
+            if (tree == null) return System.Array.Empty<SkillNodeSO>();
             return tree.AvailableNodes;
         }
     }
