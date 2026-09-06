@@ -52,6 +52,11 @@ namespace DungeonKeeper
         public string skillID;
         public string skillName;
         [TextArea] public string description;
+
+        [TextArea(2, 3)]
+        [Tooltip("Citação ou frase icônica (Flavor Text) para o nó.")]
+        public string flavorText; // Ex: '"I need more power!" - Vergil'
+
         public Sprite icon;
 
         [Header("Categoria da Recompensa")]

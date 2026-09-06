@@ -1,5 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-using System.Linq; // Necessário para ordenar os slots com .OrderBy()
 
 namespace DungeonKeeper
 {
@@ -23,13 +24,20 @@ namespace DungeonKeeper
         {
             SaveData data = new SaveData();
 
+            // 1. Recursos Globais
             if (ResourceManager.Instance != null)
             {
                 data.gold = ResourceManager.Instance.Gold;
                 data.essence = ResourceManager.Instance.Essence;
             }
 
-            // 🎯 Ordena os slots pelo NOME do GameObject ou Posição Y para garantir ordem fixa
+            // 2. Salva a Coleção Viva do Inventário (MonsterInstance)
+            if (InventoryManager.Instance != null)
+            {
+                data.ownedInstances = new List<MonsterInstance>(InventoryManager.Instance.OwnedInstances);
+            }
+
+            // 3. Salva o Estado de Alocação das Lanes ordenadas por nome
             MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude)
                                   .OrderBy(s => s.gameObject.name)
                                   .ToArray();
@@ -37,16 +45,10 @@ namespace DungeonKeeper
             for (int i = 0; i < slots.Length; i++)
             {
                 MonsterSlot slot = slots[i];
-
-                if (slot.HasMonsterEquipped)
+                if (slot.HasMonsterEquipped && slot.EquippedInstance != null)
                 {
-                    Monster monster = slot.GetSpawnedMonster();
-                    if (monster != null)
-                    {
-                        MonsterSaveState mState = monster.GetSaveData();
-                        mState.laneIndex = i; // Grava o índice rigorosamente ordenado
-                        data.activeMonsters.Add(mState);
-                    }
+                    // Grava qual instanceID está ocupando esta Lane Index
+                    data.laneDeployments[i] = slot.EquippedInstance.instanceID;
                 }
             }
 
@@ -64,50 +66,43 @@ namespace DungeonKeeper
         {
             if (CurrentData == null) return;
 
+            // 1. Restaura Recursos
             ResourceManager.Instance?.SetGold(CurrentData.gold);
             ResourceManager.Instance?.SetEssence(CurrentData.essence);
 
-            // 🎯 Mesma ordenação exata usada no SaveGame
-            MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude)
-                                .OrderBy(s => s.gameObject.name)
-                                .ToArray();
+            // 2. Restaura o Inventário com as instâncias salvas
+            if (InventoryManager.Instance != null && CurrentData.ownedInstances != null)
+            {
+                InventoryManager.Instance.LoadSavedInstances(CurrentData.ownedInstances);
+            }
 
-            // 1. Limpa TODOS os slots existentes antes de restaurar o save
+            // 3. Ordena os slots das Lanes
+            MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude)
+                                  .OrderBy(s => s.gameObject.name)
+                                  .ToArray();
+
+            // Clear inicial dos slots
             foreach (var slot in slots)
             {
                 slot.ClearSlot();
             }
 
-            // 2. Restaura apenas o que está no Save
-            foreach (MonsterSaveState state in CurrentData.activeMonsters)
+            // 4. Restaura a alocação de MonsterInstance em cada Lane
+            if (CurrentData.laneDeployments != null && InventoryManager.Instance != null)
             {
-                if (state.laneIndex < 0 || state.laneIndex >= slots.Length) continue;
-
-                MonsterData data = InventoryManager.Instance?.FindMonsterDataByID(state.monsterID);
-                if (data == null) continue;
-
-                MonsterSlot targetSlot = slots[state.laneIndex];
-                targetSlot.EquipMonster(data);
-
-                Monster monster = targetSlot.GetSpawnedMonster();
-                if (monster != null)
+                foreach (var entry in CurrentData.laneDeployments)
                 {
-                    monster.quality = state.quality;
+                    int laneIndex = entry.Key;
+                    string instanceID = entry.Value;
 
-                    // 🎯 1. Monta o objeto de progressão individual vindo dos dados do save
-                    MonsterProgression progression = new MonsterProgression
+                    if (laneIndex >= 0 && laneIndex < slots.Length)
                     {
-                        currentLevel = state.currentLevel,
-                        currentXP = state.currentXP,
-                        unlockedSkillIDs = state.unlockedSkillIDs != null ? new System.Collections.Generic.List<string>(state.unlockedSkillIDs) : new System.Collections.Generic.List<string>()
-                    };
-
-                    // 🎯 2. Inicializa o monstro com seu Data e sua Progression de runtime
-                    monster.InitializeMonster(data, progression);
-
-                    // 🎯 3. Restaura as habilidades passando a instância de MonsterProgression criada
-                    MonsterSkillTree tree = monster.GetComponent<MonsterSkillTree>();
-                    tree?.RestoreSkills(progression);
+                        MonsterInstance instance = InventoryManager.Instance.OwnedInstances.FirstOrDefault(m => m.instanceID == instanceID);
+                        if (instance != null)
+                        {
+                            slots[laneIndex].EquipMonster(instance);
+                        }
+                    }
                 }
             }
         }

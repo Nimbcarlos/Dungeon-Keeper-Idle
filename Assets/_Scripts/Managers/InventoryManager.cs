@@ -8,16 +8,14 @@ namespace DungeonKeeper
     {
         public static InventoryManager Instance { get; private set; }
 
-        [Header("Banco de Dados de Monstros")]
-        [SerializeField] private List<MonsterData> allMonsterData = new List<MonsterData>();
+        [Header("Banco de Dados")]
+        [SerializeField] private MonsterDatabase _database;
 
-        // Mapeia: MonsterData -> Quantidade Desbloqueada/Possuída pelo jogador
-        private Dictionary<MonsterData, int> _unlockedMonsters = new Dictionary<MonsterData, int>();
+        // Lista de instâncias vivas que o jogador possui
+        private List<MonsterInstance> _ownedInstances = new List<MonsterInstance>();
 
-        public IReadOnlyList<MonsterData> AllGameMonsters => allMonsterData;
+        public IReadOnlyList<MonsterInstance> OwnedInstances => _ownedInstances;
         public event Action OnInventoryChanged;
-
-
 
         private void Awake()
         {
@@ -27,123 +25,78 @@ namespace DungeonKeeper
                 return;
             }
             Instance = this;
-
-            // INICIALIZAÇÃO DE TESTE: Libera 1 cópia de cada monstro por padrão
-            foreach (var monster in allMonsterData)
-            {
-                _unlockedMonsters[monster] = 1;
-            }
         }
 
         /// <summary>
-        /// MÉTODO DO SUMMON: Chama quando o jogador ganha/invoca um novo monstro!
+        /// Adiciona uma nova instância de monstro vinda do Hatchery (Chocadeira/Invocação)
         /// </summary>
-        public void UnlockOrAddMonster(MonsterData monster, int amount = 1)
+        public void AddMonsterInstance(MonsterInstance newInstance)
         {
-            if (monster == null) return;
+            if (newInstance == null) return;
 
-            if (_unlockedMonsters.ContainsKey(monster))
-                _unlockedMonsters[monster] += amount;
-            else
-                _unlockedMonsters[monster] = amount;
-
+            _ownedInstances.Add(newInstance);
             OnInventoryChanged?.Invoke();
-            Debug.Log($"🎉 Monstro {monster.displayName} liberado! Quantidade total: {_unlockedMonsters[monster]}");
+            
+            Debug.Log($"🎉 Nova instância do monstro '{newInstance.monsterDataID}' ({newInstance.quality}) adicionada ao inventário!");
         }
 
         /// <summary>
-        /// Retorna a quantidade TOTAL que o jogador possui desse monstro
+        /// Retorna todas as instâncias de uma determinada espécie (ex: todos os Green Slimes do jogador)
         /// </summary>
-        public int GetOwnedCount(MonsterData monster)
+        public List<MonsterInstance> GetInstancesByDataID(string monsterDataID)
         {
-            if (monster == null || !_unlockedMonsters.ContainsKey(monster)) return 0;
-            return _unlockedMonsters[monster];
+            return _ownedInstances.FindAll(m => m != null && m.monsterDataID == monsterDataID);
         }
 
         /// <summary>
-        /// Retorna quantas cópias desse monstro estão equipadas atualmente nas lanes
+        /// REGRA DE EQUIPAR COM AUTO-SWAP usando a nova arquitetura de MonsterInstance
         /// </summary>
-        public int GetEquippedCount(MonsterData monster)
+        public void RequestEquipMonster(MonsterSlot targetSlot, MonsterInstance instanceToEquip)
         {
-            int count = 0;
-            MonsterSlot[] slots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude);
-            foreach (var slot in slots)
-            {
-                if (slot.EquippedMonsterData == monster)
-                    count++;
-            }
-            return count;
-        }
+            if (targetSlot == null || instanceToEquip == null) return;
 
-        /// <summary>
-        /// Retorna apenas a lista de ScriptableObjects que o jogador realmente possui no Save (Quantidade > 0)
-        /// </summary>
-        public List<MonsterData> GetUnlockedMonstersList()
-        {
-            List<MonsterData> unlocked = new List<MonsterData>();
-
-            foreach (var entry in _unlockedMonsters)
-            {
-                if (entry.Value > 0 && entry.Key != null)
-                {
-                    unlocked.Add(entry.Key);
-                }
-            }
-
-            return unlocked;
-        }
-
-        public MonsterData FindMonsterDataByID(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return null;
-            return allMonsterData.Find(d => d != null && d.id == id);
-        }
-        /// <summary>
-        /// REGRA DE EQUIPAR COM AUTO-SWAP
-        /// </summary>
-        public void RequestEquipMonster(MonsterSlot targetSlot, MonsterData monster)
-        {
-            if (targetSlot == null || monster == null) return;
-
-            int owned = GetOwnedCount(monster);
-            if (owned <= 0) return; // Jogador não possui o monstro
-
-            int currentlyEquipped = GetEquippedCount(monster);
-
-            // Se o monstro já está NESTA MESMA lane, desequipa ele em vez de ignorar!
-            if (targetSlot.EquippedMonsterData == monster)
+            // 1. Se este MESMO slot já tem esta instância, desequipa (Auto-Toggle)
+            if (targetSlot.EquippedInstance == instanceToEquip)
             {
                 RequestUnequipMonster(targetSlot);
                 return;
             }
 
-            // Se atingiu o limite de cópias que possui, remove da lane antiga para mover para a nova
-            if (currentlyEquipped >= owned)
+            // 2. Se a mesma instância já estiver equipada em OUTRO slot, limpa a lane antiga primeiro (Anti-Duplicação)
+            MonsterSlot[] allSlots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude);
+            foreach (var slot in allSlots)
             {
-                MonsterSlot[] allSlots = FindObjectsByType<MonsterSlot>(FindObjectsInactive.Exclude);
-                foreach (var slot in allSlots)
+                if (slot != targetSlot && slot.EquippedInstance == instanceToEquip)
                 {
-                    if (slot != targetSlot && slot.EquippedMonsterData == monster)
-                    {
-                        slot.ClearSlot(); // Limpa o slot anterior onde ele estava
-                        break;
-                    }
+                    slot.ClearSlot();
+                    break;
                 }
             }
 
-            // Equipa na nova lane
-            targetSlot.EquipMonster(monster);
+            // 3. Equipa a instância no slot solicitado
+            targetSlot.EquipMonster(instanceToEquip);
             OnInventoryChanged?.Invoke();
-            Debug.Log($"🛡️ Monstro {monster.displayName} equipado na lane {targetSlot.name}!");
+        }
+
+        /// <summary>
+        /// Substitui a lista de instâncias do inventário pelas instâncias vindas do Save Data.
+        /// </summary>
+        public void LoadSavedInstances(List<MonsterInstance> loadedInstances)
+        {
+            _ownedInstances = loadedInstances ?? new List<MonsterInstance>();
+            OnInventoryChanged?.Invoke();
+            
+            Debug.Log($"💾 [Inventory] Carregadas {_ownedInstances.Count} instâncias de monstros do save!");
         }
 
         public void RequestUnequipMonster(MonsterSlot targetSlot)
         {
             if (targetSlot == null || !targetSlot.HasMonsterEquipped) return;
 
-            Debug.Log($"🗑️ Monstro {targetSlot.EquippedMonsterData.displayName} removido da lane {targetSlot.name}!");
             targetSlot.ClearSlot();
             OnInventoryChanged?.Invoke();
         }
+
+        public MonsterDatabase GetDatabase() => _database;
     }
 }

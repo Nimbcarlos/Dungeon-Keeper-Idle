@@ -1,4 +1,59 @@
 using UnityEngine;
+using TMPro;
+
+namespace DungeonKeeper
+{
+    public class UI_SkillRowSlot : MonoBehaviour
+    {
+        [Header("Slots dos Nós")]
+        [SerializeField] private UI_SkillNodeSlot _leftSlot;
+        [SerializeField] private UI_SkillNodeSlot _rightSlot;
+
+        [Header("Badge Central de Nível")]
+        [SerializeField] private TextMeshProUGUI _levelText;
+
+        private SkillNodeSO _leftNode;
+        private SkillNodeSO _rightNode;
+
+        public void SetupRow(SkillNodeSO leftNode, SkillNodeSO rightNode, MonsterSkillTree tree, System.Action<SkillNodeSO, SkillNodeSO> onSelectCallback)
+        {
+            _leftNode = leftNode;
+            _rightNode = rightNode;
+
+            // 🎯 Captura e exibe o nível necessário da linha
+            int requiredLevel = 1;
+            if (leftNode != null) requiredLevel = leftNode.requiredMonsterLevel;
+            else if (rightNode != null) requiredLevel = rightNode.requiredMonsterLevel;
+
+            if (_levelText != null)
+            {
+                _levelText.text = $"Lv. {requiredLevel}";
+            }
+
+            // Configura o slot da esquerda
+            if (_leftSlot != null && leftNode != null)
+            {
+                bool isUnlocked = tree.IsNodeUnlocked(leftNode.skillID);
+                bool isBlocked = rightNode != null && tree.IsNodeUnlocked(rightNode.skillID);
+                bool canUnlock = tree.CanUnlockNodeInRow(leftNode, rightNode);
+
+                _leftSlot.Setup(leftNode, tree, isUnlocked, isBlocked, canUnlock, () => onSelectCallback?.Invoke(leftNode, rightNode));
+            }
+
+            // Configura o slot da direita
+            if (_rightSlot != null && rightNode != null)
+            {
+                bool isUnlocked = tree.IsNodeUnlocked(rightNode.skillID);
+                bool isBlocked = leftNode != null && tree.IsNodeUnlocked(leftNode.skillID);
+                bool canUnlock = tree.CanUnlockNodeInRow(rightNode, leftNode);
+
+                _rightSlot.Setup(rightNode, tree, isUnlocked, isBlocked, canUnlock, () => onSelectCallback?.Invoke(rightNode, leftNode));
+            }
+        }
+    }
+}
+
+/*using UnityEngine;
 
 namespace DungeonKeeper
 {
@@ -47,3 +102,4 @@ namespace DungeonKeeper
         }
     }
 }
+*/

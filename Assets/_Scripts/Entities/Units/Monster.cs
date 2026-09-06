@@ -17,13 +17,13 @@ namespace DungeonKeeper
     {
         // ── PROPRIEDADES DE DADOS ─────────────────────────
         public MonsterData Data { get; private set; }
-        public MonsterProgression Progression { get; private set; } // 🎯 FIX: Declarada a propriedade Progression
+        public MonsterProgression Progression { get; private set; }
         public Vector3 GuardPosition { get; private set; }
 
         [Header("Qualidade & Raridade")]
         public MonsterQuality quality = MonsterQuality.Common;
 
-        // ── PROGRESSÃO DE NÍVEL (Ponteiros para o objeto Progression) ───────────────────────────
+        // ── PROGRESSÃO DE NÍVEL ───────────────────────────
         public int CurrentLevel => Progression != null ? Progression.currentLevel : 1;
         public int CurrentXP => Progression != null ? Progression.currentXP : 0;
 
@@ -35,6 +35,7 @@ namespace DungeonKeeper
         public event Action<int> OnLevelUp;
         public event Action<int> OnXPGained;
 
+        private MonsterInstance _instance;
         private MonsterSkillTree _skillTree;
 
         private static readonly int IsMoving = Animator.StringToHash("isMoving");
@@ -62,21 +63,33 @@ namespace DungeonKeeper
         {
             base.Awake();
             _skillTree = GetComponent<MonsterSkillTree>();
-            Debug.Assert(_skillTree != null, $"Monster '{name}' não possui um componente MonsterSkillTree. Certifique-se de adicioná-lo.");
+            Debug.Assert(_skillTree != null, $"Monster '{name}' não possui um componente MonsterSkillTree.");
         }
 
+        /// <summary>
+        /// Inicializa o monstro mantendo o estado de progressão existente (evita reseta ao respawn).
+        /// </summary>
         public void InitializeMonster(MonsterData data, MonsterProgression progression = null)
         {
             Data = data;
-            Progression = progression ?? new MonsterProgression();
 
-            // Aplica os atributos base calculados para o nível individual do monstro
+            // 🎯 FIX: Só cria um novo se nem a propriedade nem o parâmetro existirem!
+            if (progression != null)
+            {
+                Progression = progression;
+            }
+            else if (Progression == null)
+            {
+                Progression = new MonsterProgression();
+            }
+
+            // Aplica os atributos base calculados para o nível mantido no Progression
             base.Initialize(data.GetStatsForLevel(Progression.currentLevel));
 
-            // Configura componentes de ataque baseados no MonsterData
+            // Configura componentes de ataque
             SetupAttackComponents(data);
 
-            // Inicializa a árvore acoplando o Data (blueprint) e a Progression (instância)
+            // Inicializa a árvore com a instância mantida
             if (_skillTree != null)
             {
                 _skillTree.InitializeTree(Data, Progression);
@@ -280,6 +293,24 @@ namespace DungeonKeeper
         {
             if (Animator == null) return;
             Animator.SetBool(IsDead, true);
+        }
+
+        public void InitializeMonster(MonsterInstance instance, MonsterDatabase database)
+        {
+            if (instance == null) return;
+
+            _instance = instance;
+            Data = instance.GetData(database);
+            Progression = instance.progression;
+            quality = instance.quality;
+
+            base.Initialize(Data.GetStatsForLevel(Progression.currentLevel));
+            SetupAttackComponents(Data);
+
+            if (_skillTree != null)
+            {
+                _skillTree.InitializeTree(Data, Progression);
+            }
         }
     }
 }

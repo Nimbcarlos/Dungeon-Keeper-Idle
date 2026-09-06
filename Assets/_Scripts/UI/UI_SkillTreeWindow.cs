@@ -1,6 +1,7 @@
 using TMPro;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace DungeonKeeper
 {
@@ -20,12 +21,21 @@ namespace DungeonKeeper
         [SerializeField] private Transform _nodesContainer;
         [SerializeField] private GameObject _rowPrefab; 
 
+        [Header("Painel de Rascunho & Descrição (Separados)")]
+        [SerializeField] private TextMeshProUGUI _flavorText;      // 📜 Texto de citação/anime
+        [SerializeField] private TextMeshProUGUI _descriptionText; // ⚔️ Descrição técnica do bônus
+        [SerializeField] private Button _acceptButton;
+
         [Header("Botões de Ação")]
         [SerializeField] private GameObject _closeButton;
 
         private Monster _selectedMonster;
         private MonsterSkillTree _selectedSkillTree;
         private List<UI_SkillRowSlot> _instantiatedRows = new List<UI_SkillRowSlot>();
+
+        // Estado do Rascunho (Draft)
+        private SkillNodeSO _draftSelectedNode;
+        private SkillNodeSO _draftOppositeNode;
 
         public bool IsOpen => _windowPanel != null && _windowPanel.activeSelf;
 
@@ -34,26 +44,27 @@ namespace DungeonKeeper
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
 
+            if (_acceptButton != null)
+            {
+                _acceptButton.onClick.AddListener(ConfirmDraftSelection);
+            }
+
             CloseWindow();
         }
 
         public void OpenWindowForMonster(Monster monster)
         {
-            Debug.Log($"[SkillTreeWindow] 1. Tentando abrir para o monstro: {(monster != null ? monster.name : "NULL")}");
             if (monster == null) return;
 
             _selectedMonster = monster;
             _selectedSkillTree = monster.GetComponent<MonsterSkillTree>();
 
-            if (_selectedSkillTree == null)
-            {
-                Debug.LogWarning($"[SkillTreeWindow] ERRO: O monstro {monster.name} NÃO possui o componente MonsterSkillTree!");
-                return;
-            }
+            if (_selectedSkillTree == null) return;
 
-            _selectedSkillTree.OnSkillTreeUpdated -= RefreshUI; // Evita duplicar inscrição
+            _selectedSkillTree.OnSkillTreeUpdated -= RefreshUI;
             _selectedSkillTree.OnSkillTreeUpdated += RefreshUI;
 
+            ClearDraft();
             _windowPanel.SetActive(true);
             RefreshUI();
         }
@@ -67,20 +78,87 @@ namespace DungeonKeeper
 
             _selectedMonster = null;
             _selectedSkillTree = null;
+            ClearDraft();
 
             if (_windowPanel != null)
                 _windowPanel.SetActive(false);
         }
 
-        private void RefreshUI()
+        private void ClearDraft()
         {
-            Debug.Log("[SkillTreeWindow] 2. RefreshUI chamado.");
+            _draftSelectedNode = null;
+            _draftOppositeNode = null;
 
-            if (_selectedMonster == null || _selectedSkillTree == null)
+            if (_flavorText != null)
+                _flavorText.text = string.Empty;
+
+            if (_descriptionText != null)
+                _descriptionText.text = "Select a skill node to preview its effects.";
+
+            if (_acceptButton != null)
+                _acceptButton.interactable = false;
+        }
+
+        private void OnNodeClickedInDraft(SkillNodeSO clickedNode, SkillNodeSO oppositeNode)
+        {
+            if (_selectedSkillTree == null || clickedNode == null) return;
+
+            // 1. Atualiza o Flavor Text (Citação)
+            if (_flavorText != null)
             {
-                Debug.LogWarning($"[SkillTreeWindow] ERRO: _selectedMonster é {(_selectedMonster == null ? "NULL" : "OK")} ou _selectedSkillTree é {(_selectedSkillTree == null ? "NULL" : "OK")}");
+                _flavorText.text = !string.IsNullOrEmpty(clickedNode.flavorText) 
+                    ? $"\"{clickedNode.flavorText}\"" 
+                    : string.Empty;
+            }
+
+            // 2. Se o nó já estiver comprado/desbloqueado
+            if (_selectedSkillTree.IsNodeUnlocked(clickedNode.skillID))
+            {
+                _draftSelectedNode = null;
+                _draftOppositeNode = null;
+
+                if (_descriptionText != null)
+                {
+                    _descriptionText.text = $"<b>{clickedNode.skillName}</b>\n<color=green>[Unlocked]</color> {clickedNode.description}";
+                }
+
+                if (_acceptButton != null) _acceptButton.interactable = false;
                 return;
             }
+
+            // 3. Seleção Provisória (Draft)
+            _draftSelectedNode = clickedNode;
+            _draftOppositeNode = oppositeNode;
+
+            if (_descriptionText != null)
+            {
+                _descriptionText.text = $"{clickedNode.description}";
+            }
+
+            // 4. Valida se o monstro pode comprar este nó para liberar o botão Accept
+            bool canUnlock = _selectedSkillTree.CanUnlockNodeInRow(clickedNode, oppositeNode);
+            if (_acceptButton != null)
+            {
+                _acceptButton.interactable = canUnlock;
+            }
+        }
+
+        private void ConfirmDraftSelection()
+        {
+            if (_selectedSkillTree == null || _draftSelectedNode == null) return;
+
+            // Tenta efetivar a compra no sistema
+            if (_selectedSkillTree.TryUnlockNode(_draftSelectedNode, _draftOppositeNode))
+            {
+                Debug.Log($"[SkillTreeWindow] Seleção confirmada para: {_draftSelectedNode.skillName}");
+                ClearDraft();
+                RefreshUI();
+            }
+        }
+
+        private void RefreshUI()
+        {
+            if (_selectedMonster == null || _selectedSkillTree == null) return;
 
             // 1. Atualiza dados do cabeçalho
             if (_monsterNameText != null) 
@@ -92,67 +170,35 @@ namespace DungeonKeeper
             if (_skillPointsText != null) 
                 _skillPointsText.text = $"Available Points: {_selectedSkillTree.AvailableSkillPoints}";
 
-            // 2. Limpa linhas antigas da UI
+            // 2. Limpa linhas antigas
             foreach (var row in _instantiatedRows)
             {
                 if (row != null) Destroy(row.gameObject);
             }
             _instantiatedRows.Clear();
 
-            // 3. Checagem de segurança do Prefab e do Container
-            if (_rowPrefab == null)
-            {
-                Debug.LogError("[SkillTreeWindow] ERRO CRÍTICO: '_rowPrefab' não foi arrastado no Inspector do UI_SkillTreeWindow!");
-                return;
-            }
+            if (_rowPrefab == null || _nodesContainer == null) return;
 
-            if (_nodesContainer == null)
-            {
-                Debug.LogError("[SkillTreeWindow] ERRO CRÍTICO: '_nodesContainer' não foi arrastado no Inspector do UI_SkillTreeWindow!");
-                return;
-            }
-
-            // 4. Agrupa e popula os nós (compatível com IReadOnlyList)
-            IReadOnlyList<SkillNodeSO> availableNodes = GetNodesFromTree(_selectedSkillTree);
-            Debug.Log($"[SkillTreeWindow] 3. Total de nós encontrados na Tree: {(availableNodes != null ? availableNodes.Count : 0)}");
-
-            if (availableNodes == null || availableNodes.Count == 0)
-            {
-                Debug.LogWarning("[SkillTreeWindow] A lista AvailableNodes da MonsterSkillTree está VAZIA! Adicione os SO_SkillNode no Inspector do Monstro/Data.");
-                return;
-            }
+            // 3. Popula as linhas
+            IReadOnlyList<SkillNodeSO> availableNodes = _selectedSkillTree.AvailableNodes;
+            if (availableNodes == null || availableNodes.Count == 0) return;
 
             for (int i = 0; i < availableNodes.Count; i += 2)
             {
                 SkillNodeSO leftNode = availableNodes[i];
                 SkillNodeSO rightNode = (i + 1 < availableNodes.Count) ? availableNodes[i + 1] : null;
 
-                Debug.Log($"[SkillTreeWindow] 4. Processando Linha {i / 2}: Esquerda = {(leftNode != null ? leftNode.skillName : "NULL")}, Direita = {(rightNode != null ? rightNode.skillName : "NULL")}");
-
                 if (leftNode == null && rightNode == null) continue;
 
-                // Instancia o prefab da LINHA
                 GameObject rowObj = Instantiate(_rowPrefab, _nodesContainer);
                 UI_SkillRowSlot rowSlot = rowObj.GetComponent<UI_SkillRowSlot>();
 
                 if (rowSlot != null)
                 {
-                    Debug.Log($"[SkillTreeWindow] 5. UI_SkillRowSlot encontrado no Prefab! Chamando SetupRow...");
-                    rowSlot.SetupRow(leftNode, rightNode, _selectedSkillTree);
+                    rowSlot.SetupRow(leftNode, rightNode, _selectedSkillTree, OnNodeClickedInDraft);
                     _instantiatedRows.Add(rowSlot);
                 }
-                else
-                {
-                    Debug.LogError($"[SkillTreeWindow] ERRO CRÍTICO: O Prefab '{_rowPrefab.name}' foi instanciado, mas NÃO tem o componente 'UI_SkillRowSlot' anexado na raiz dele!");
-                }
             }
-        }
-
-        // 🎯 FIX: O tipo de retorno foi alterado para IReadOnlyList para casar com o MonsterSkillTree.cs
-        private IReadOnlyList<SkillNodeSO> GetNodesFromTree(MonsterSkillTree tree)
-        {
-            if (tree == null) return System.Array.Empty<SkillNodeSO>();
-            return tree.AvailableNodes;
         }
     }
 }

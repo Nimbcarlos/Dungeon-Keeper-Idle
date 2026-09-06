@@ -1,36 +1,44 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System;
 
 namespace DungeonKeeper
 {
     public class UI_MonsterCard : MonoBehaviour
     {
-        [Header("Referências de UI")]
-        [SerializeField] private Image _iconImage;
         [SerializeField] private TextMeshProUGUI _nameText;
+        [SerializeField] private TextMeshProUGUI _levelText;
+        [SerializeField] private Image _iconImage;
         [SerializeField] private Button _cardButton;
 
-        private MonsterData _data;
-        private System.Action<MonsterData> _onSelectedCallback;
+        private MonsterInstance _instance;
 
-        public void Setup(MonsterData data, int availableCount, System.Action<MonsterData> onSelected)
+        public void Setup(MonsterInstance instance, MonsterDatabase database, Action onClickCallback)
         {
-            _data = data;
-            _onSelectedCallback = onSelected;
+            _instance = instance;
 
-            if (_iconImage != null && data != null && data.icon != null) 
-                _iconImage.sprite = data.icon;
+            if (instance == null) return;
 
-            if (_nameText != null && data != null) 
+            // Busca os dados visuais (ícone e nome) no ScriptableObject através do Database
+            MonsterData data = instance.GetData(database);
+            if (data != null)
             {
-                _nameText.text = availableCount > 1 ? $"{data.displayName} x{availableCount}" : data.displayName;
+                if (_nameText != null) _nameText.text = data.displayName;
+                if (_iconImage != null) _iconImage.sprite = data.icon;
             }
 
+            // Exibe o nível individual da instância
+            if (_levelText != null && instance.progression != null)
+            {
+                _levelText.text = $"Lv. {instance.progression.currentLevel}";
+            }
+
+            // Configura a ação de clique do card
             if (_cardButton != null)
             {
                 _cardButton.onClick.RemoveAllListeners();
-                _cardButton.onClick.AddListener(() => _onSelectedCallback?.Invoke(_data));
+                _cardButton.onClick.AddListener(() => onClickCallback?.Invoke());
             }
         }
     }

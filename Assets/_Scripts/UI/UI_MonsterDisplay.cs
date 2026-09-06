@@ -7,7 +7,9 @@ namespace DungeonKeeper
     {
         [Header("Configurações da Exibição")]
         [SerializeField] private Transform _displayParent; 
-        [SerializeField] private float _targetHeightPixels = 120f; // Altura máxima desejada para o monstro no container
+        [SerializeField] private float _targetHeightPixels = 120f; // Fallback caso não encontre RectTransform
+        [Range(0.1f, 1f)]
+        [SerializeField] private float _heightPercentage = 0.8f; // 🎯 Porcentagem desejada da altura do container (ex: 0.8 = 80%)
         [SerializeField] private Vector3 _spawnOffset = new Vector3(0f, 0f, 0f);
 
         private GameObject _currentMonsterInstance;
@@ -58,14 +60,14 @@ namespace DungeonKeeper
         }
 
         /// <summary>
-        /// Calcula os limites (Bounds) de todos os SpriteRenderers do monstro e ajusta a escala
+        /// Ajusta a escala do monstro com base na porcentagem (_heightPercentage) do container
         /// </summary>
         private void AdjustScaleToFitContainer(GameObject monsterInstance)
         {
             SpriteRenderer[] renderers = monsterInstance.GetComponentsInChildren<SpriteRenderer>();
             if (renderers.Length == 0) return;
 
-            // Encontra os limites combinados do SpriteRenderer
+            // Encontra os limites combinados do SpriteRenderer em World Units
             Bounds combinedBounds = renderers[0].bounds;
             for (int i = 1; i < renderers.Length; i++)
             {
@@ -75,18 +77,23 @@ namespace DungeonKeeper
             float currentSpriteHeight = combinedBounds.size.y;
             if (currentSpriteHeight <= 0) return;
 
-            // Descobre o tamanho do container de UI se existir
+            // Pega a altura do container em pixels
             float containerHeight = _targetHeightPixels;
             if (_displayParent is RectTransform rectTransform)
             {
-                containerHeight = rectTransform.rect.height;
+                float rectH = rectTransform.rect.height;
+                if (rectH > 0) containerHeight = rectH;
             }
 
-            // Calcula a escala proporcional para o monstro ocupar 80% do container
-            float desiredHeight = containerHeight * 0.6f;
-            float scaleFactor = desiredHeight / (currentSpriteHeight * 100f); 
+            // 🎯 CÁLCULO BASEADO EM PORCENTAGEM (Sem divisão por 100 incorreta)
+            // Converte a altura desejada em pixels para a proporção equivalente do Sprite
+            float desiredHeightPixels = containerHeight * _heightPercentage;
+            
+            // Como 1 unidade no Canvas costuma equivaler a 1px quando ajustado, 
+            // calculamos o fator multiplicador diretamente pela altura do Bounds:
+            float scaleFactor = desiredHeightPixels / (currentSpriteHeight * 100f); 
 
-            monsterInstance.transform.localScale = Vector3.one * Mathf.Clamp(scaleFactor, 0.1f, 100f);
+            monsterInstance.transform.localScale = Vector3.one * scaleFactor;
         }
 
         public void ClearDisplay()

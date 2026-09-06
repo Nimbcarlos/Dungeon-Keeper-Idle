@@ -11,6 +11,12 @@ namespace DungeonKeeper
         public int gold;
         public int essence;
 
+        // Fichas vivas salvas no inventário do jogador
+        public List<MonsterInstance> ownedInstances = new List<MonsterInstance>();
+
+        // Dicionário/Lista mapeando: [Índice da Lane] -> [instanceID da MonsterInstance]
+        public Dictionary<int, string> laneDeployments = new Dictionary<int, string>();
+
         // 🧟 Monstros Ativos nas Lanes
         public List<MonsterSaveState> activeMonsters = new List<MonsterSaveState>();
 
