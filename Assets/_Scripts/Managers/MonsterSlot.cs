@@ -17,6 +17,15 @@ namespace DungeonKeeper
 
         public bool HasMonsterEquipped => EquippedInstance != null;
 
+        private void OnMouseDown() => OnClickSlot();
+
+        public void OnClickSlot()
+        {
+            var window = UI_MonsterInventoryWindow.Instance;
+            if (window != null && window.IsOpen)
+                window.AssignSelectedMonsterToLane(this);
+        }
+
         public void SetHighlightVisible(bool visible)
         {
             if (_highlightObject != null)
@@ -34,9 +43,12 @@ namespace DungeonKeeper
         {
             if (EquippedInstance == null) return;
 
+            if (_database == null && InventoryManager.Instance != null)
+                _database = InventoryManager.Instance.GetDatabase();
             MonsterData data = EquippedInstance.GetData(_database);
             if (data == null || data.prefab == null) return;
 
+            if (_spawnedMonsterInstance != null) Destroy(_spawnedMonsterInstance);
             Vector3 spawnPos = _spawnPoint != null ? _spawnPoint.position : transform.position;
             _spawnedMonsterInstance = Instantiate(data.prefab, spawnPos, Quaternion.identity);
 
@@ -45,6 +57,7 @@ namespace DungeonKeeper
             {
                 // Injeta a instância viva e o database no monstro
                 monster.InitializeMonster(EquippedInstance, _database);
+                monster.SetGuardPosition(spawnPos);
                 monster.Health.OnDeath += () => ScheduleRespawn();
             }
         }

@@ -9,6 +9,8 @@ namespace DungeonKeeper
         [Header("Lista Global de Monstros do Jogo")]
         [SerializeField] private List<MonsterData> _allMonsters = new List<MonsterData>();
 
+        public IReadOnlyList<MonsterData> AllMonsters => _allMonsters;
+
         private Dictionary<string, MonsterData> _databaseLookup;
 
         /// <summary>

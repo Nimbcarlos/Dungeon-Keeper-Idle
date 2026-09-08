@@ -23,6 +23,29 @@ namespace DungeonKeeper
         [SerializeField] private Button _equipButton;
         [SerializeField] private Button _openSkillTreeButton;
 
+        private bool _ownsPause;
+        private float _previousTimeScale;
+
+        public void OpenWindow() => OpenWindowForLane(null);
+        public void ToggleWindow()
+        {
+            if (IsOpen) CloseWindow();
+            else OpenWindow();
+        }
+
+        private void RestorePause()
+        {
+            if (!_ownsPause) return;
+            Time.timeScale = _previousTimeScale;
+            _ownsPause = false;
+        }
+
+        private void OnDisable()
+        {
+            RestorePause();
+            HighlightLanes(false);
+        }
+
         private MonsterInstance _selectedInstance;
         private MonsterSlot _targetLaneSlot;
         private List<GameObject> _instantiatedCards = new List<GameObject>();
@@ -39,8 +62,19 @@ namespace DungeonKeeper
 
         public void OpenWindowForLane(MonsterSlot slot)
         {
+            if (_windowPanel == null)
+            {
+                Debug.LogError("[Equip] Atribua Window Panel no Inspector.", this);
+                return;
+            }
             _targetLaneSlot = slot;
             _windowPanel.SetActive(true);
+            if (!_ownsPause)
+            {
+                _previousTimeScale = Time.timeScale;
+                _ownsPause = true;
+            }
+            Time.timeScale = 0f;
 
             HighlightLanes(true);
             RefreshInventoryList();
@@ -48,6 +82,7 @@ namespace DungeonKeeper
 
         public void CloseWindow()
         {
+            RestorePause();
             HighlightLanes(false);
             _targetLaneSlot = null;
             _selectedInstance = null;
@@ -66,6 +101,13 @@ namespace DungeonKeeper
 
             if (InventoryManager.Instance == null) return;
 
+            if (_monsterListContainer == null || _monsterCardPrefab == null)
+            {
+                Debug.LogError("[Equip] Atribua o container da lista e o prefab no Inspector.", this);
+                return;
+            }
+            InventoryManager.Instance.EnsureDemoMonsters();
+
             // 🎯 Lê a lista de instâncias vivas possuídas pelo jogador
             IReadOnlyList<MonsterInstance> ownedInstances = InventoryManager.Instance.OwnedInstances;
             MonsterDatabase database = InventoryManager.Instance.GetDatabase();
@@ -77,11 +119,26 @@ namespace DungeonKeeper
                 GameObject cardObj = Instantiate(_monsterCardPrefab, _monsterListContainer);
                 _instantiatedCards.Add(cardObj);
 
+                MonsterData data = instance.GetData(database);
+                if (data == null) { Destroy(cardObj); continue; }
+
                 // Configura o card (se você tiver um script de card UI dedicado)
                 UI_MonsterCard cardScript = cardObj.GetComponent<UI_MonsterCard>();
                 if (cardScript != null)
                 {
                     cardScript.Setup(instance, database, () => OnSelectMonsterInstance(instance));
+                }
+                else
+                {
+                    var listItem = cardObj.GetComponent<UI_MonsterListItem>();
+                    if (listItem != null)
+                        listItem.Setup(
+                            instance,
+                            database,
+                            OnSelectMonsterInstance
+                        );
+                    else
+                        Debug.LogError("[Equip] O prefab precisa de UI_MonsterCard ou UI_MonsterListItem.", cardObj);
                 }
             }
 
@@ -134,8 +191,7 @@ namespace DungeonKeeper
                 {
                     if (_targetLaneSlot != null && _selectedInstance != null)
                     {
-                        InventoryManager.Instance.RequestEquipMonster(_targetLaneSlot, _selectedInstance);
-                        CloseWindow();
+                        AssignSelectedMonsterToLane(_targetLaneSlot);
                     }
                 });
             }
@@ -169,8 +225,10 @@ namespace DungeonKeeper
         {
             if (slot == null || _selectedInstance == null || InventoryManager.Instance == null) return;
 
+            _targetLaneSlot = slot;
             InventoryManager.Instance.RequestEquipMonster(slot, _selectedInstance);
-            CloseWindow();
+            // Mantem a selecao e a pausa para experimentar outras lanes e monstros.
+            UpdateDetailsPanel();
         }
 
         private void HighlightLanes(bool highlight)

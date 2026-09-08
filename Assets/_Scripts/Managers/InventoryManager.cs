@@ -11,6 +11,22 @@ namespace DungeonKeeper
         [Header("Banco de Dados")]
         [SerializeField] private MonsterDatabase _database;
 
+        [Header("Prototipo / Demonstracao")]
+        [Tooltip("Cria uma copia de cada especie somente quando a colecao esta vazia. Desative para a economia final.")]
+        [SerializeField] private bool _seedDemoMonstersWhenEmpty = true;
+
+        public void EnsureDemoMonsters()
+        {
+            if (!_seedDemoMonstersWhenEmpty || _ownedInstances.Count > 0 || _database == null) return;
+            var ids = new HashSet<string>();
+            foreach (var data in _database.AllMonsters)
+            {
+                if (data == null || string.IsNullOrEmpty(data.id) || data.prefab == null || !ids.Add(data.id)) continue;
+                _ownedInstances.Add(new MonsterInstance(data.id, MonsterQuality.Common));
+            }
+            if (_ownedInstances.Count > 0) OnInventoryChanged?.Invoke();
+        }
+
         // Lista de instâncias vivas que o jogador possui
         private List<MonsterInstance> _ownedInstances = new List<MonsterInstance>();
 
@@ -84,6 +100,7 @@ namespace DungeonKeeper
         public void LoadSavedInstances(List<MonsterInstance> loadedInstances)
         {
             _ownedInstances = loadedInstances ?? new List<MonsterInstance>();
+            EnsureDemoMonsters();
             OnInventoryChanged?.Invoke();
             
             Debug.Log($"💾 [Inventory] Carregadas {_ownedInstances.Count} instâncias de monstros do save!");

@@ -15,7 +15,7 @@ namespace DungeonKeeper
         public List<MonsterInstance> ownedInstances = new List<MonsterInstance>();
 
         // Dicionário/Lista mapeando: [Índice da Lane] -> [instanceID da MonsterInstance]
-        public Dictionary<int, string> laneDeployments = new Dictionary<int, string>();
+        public List<LaneSaveState> laneDeployments = new List<LaneSaveState>();
 
         // 🧟 Monstros Ativos nas Lanes
         public List<MonsterSaveState> activeMonsters = new List<MonsterSaveState>();
@@ -26,6 +26,13 @@ namespace DungeonKeeper
 
         // 🎨 Cosméticos / Skins
         public List<string> unlockedSkinIDs = new List<string>();
+    }
+
+    [Serializable]
+    public class LaneSaveState
+    {
+        public int laneIndex;
+        public string instanceID;
     }
 
     [Serializable]

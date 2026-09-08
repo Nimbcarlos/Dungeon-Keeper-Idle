@@ -9,6 +9,26 @@ namespace DungeonKeeper
         public static SaveManager Instance { get; private set; }
         public SaveData CurrentData { get; private set; }
 
+        private bool _loaded;
+        private InventoryManager _inventory;
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused && _loaded) SaveGame();
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (_loaded) SaveGame();
+        }
+
+        private void OnDestroy()
+        {
+            if (_inventory != null)
+                _inventory.OnInventoryChanged -= SaveGame;
+            if (Instance == this) Instance = null;
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -22,7 +42,10 @@ namespace DungeonKeeper
 
         public void SaveGame()
         {
-            SaveData data = new SaveData();
+            if (!_loaded || InventoryManager.Instance == null) return;
+            // Preserva os campos que este manager ainda nao gerencia (ovos, skins).
+            SaveData data = CurrentData ?? new SaveData();
+            data.laneDeployments = new List<LaneSaveState>();
 
             // 1. Recursos Globais
             if (ResourceManager.Instance != null)
@@ -48,7 +71,11 @@ namespace DungeonKeeper
                 if (slot.HasMonsterEquipped && slot.EquippedInstance != null)
                 {
                     // Grava qual instanceID está ocupando esta Lane Index
-                    data.laneDeployments[i] = slot.EquippedInstance.instanceID;
+                    data.laneDeployments.Add(new LaneSaveState
+                    {
+                        laneIndex = i,
+                        instanceID = slot.EquippedInstance.instanceID
+                    });
                 }
             }
 
@@ -58,8 +85,13 @@ namespace DungeonKeeper
 
         public void LoadGame()
         {
+            _loaded = false;
             CurrentData = SaveSystem.Load();
             ApplyLoadedData();
+            _loaded = InventoryManager.Instance != null;
+            if (_inventory != null) _inventory.OnInventoryChanged -= SaveGame;
+            _inventory = InventoryManager.Instance;
+            if (_inventory != null) _inventory.OnInventoryChanged += SaveGame;
         }
 
         private void ApplyLoadedData()
@@ -92,12 +124,13 @@ namespace DungeonKeeper
             {
                 foreach (var entry in CurrentData.laneDeployments)
                 {
-                    int laneIndex = entry.Key;
-                    string instanceID = entry.Value;
+                    if (entry == null) continue;
+                    int laneIndex = entry.laneIndex;
+                    string instanceID = entry.instanceID;
 
                     if (laneIndex >= 0 && laneIndex < slots.Length)
                     {
-                        MonsterInstance instance = InventoryManager.Instance.OwnedInstances.FirstOrDefault(m => m.instanceID == instanceID);
+                        MonsterInstance instance = InventoryManager.Instance.OwnedInstances.FirstOrDefault(m => m != null && m.instanceID == instanceID);
                         if (instance != null)
                         {
                             slots[laneIndex].EquipMonster(instance);
