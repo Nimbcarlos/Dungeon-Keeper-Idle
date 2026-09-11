@@ -40,6 +40,9 @@ namespace DungeonKeeper
         {
             _data = data;
             _progression = progression ?? new MonsterProgression();
+            _progression.unlockedSkillIDs ??= new List<string>();
+            _progression.claimedRewards ??= new List<ClaimedReward>();
+
 
             ApplySkillModifiers();
             OnSkillTreeUpdated?.Invoke();
@@ -57,7 +60,9 @@ namespace DungeonKeeper
 
         public bool CanUnlockNodeInRow(SkillNodeSO clickedNode, SkillNodeSO oppositeNodeInRow)
         {
-            if (clickedNode == null || _data == null || _progression == null || _monster == null) return false;
+            if (clickedNode == null || _data == null || _progression == null) return false;
+            if (_data.availableSkills == null) return false;
+
 
             // 1. Checa nível e se já foi comprado
             if (_monster.CurrentLevel < clickedNode.requiredMonsterLevel) return false;
