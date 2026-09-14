@@ -22,7 +22,9 @@ namespace DungeonKeeper
             foreach (var data in _database.AllMonsters)
             {
                 if (data == null || string.IsNullOrEmpty(data.id) || data.prefab == null || !ids.Add(data.id)) continue;
-                _ownedInstances.Add(new MonsterInstance(data.id, MonsterQuality.Common));
+                var instance = new MonsterInstance(data.id, MonsterQuality.Common);
+                instance.progression.ResolveTalents(data, 10 * ((int)instance.quality + 1));
+                _ownedInstances.Add(instance);
             }
             if (_ownedInstances.Count > 0) OnInventoryChanged?.Invoke();
         }
@@ -50,6 +52,8 @@ namespace DungeonKeeper
         {
             if (newInstance == null) return;
 
+            newInstance.progression ??= new MonsterProgression();
+            newInstance.progression.ResolveTalents(newInstance.GetData(_database), 10 * ((int)newInstance.quality + 1));
             _ownedInstances.Add(newInstance);
             OnInventoryChanged?.Invoke();
             
@@ -100,6 +104,12 @@ namespace DungeonKeeper
         public void LoadSavedInstances(List<MonsterInstance> loadedInstances)
         {
             _ownedInstances = loadedInstances ?? new List<MonsterInstance>();
+            foreach (var instance in _ownedInstances)
+            {
+                if (instance == null) continue;
+                instance.progression ??= new MonsterProgression();
+                instance.progression.ResolveTalents(instance.GetData(_database), 10 * ((int)instance.quality + 1));
+            }
             EnsureDemoMonsters();
             OnInventoryChanged?.Invoke();
             

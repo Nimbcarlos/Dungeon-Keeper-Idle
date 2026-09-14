@@ -30,14 +30,27 @@ namespace DungeonKeeper
             AdjustScaleToFitContainer(_currentMonsterInstance);
 
             _currentMonsterInstance.transform.localPosition = _spawnOffset;
+            // Preview instances use the containing Canvas order, not world Y.
+            foreach (var sorter in _currentMonsterInstance.GetComponentsInChildren<DynamicSpriteSorter>(true))
+                sorter.enabled = false;
 
-            // Desenha na frente de toda a UI
-            SpriteRenderer[] renderers = _currentMonsterInstance.GetComponentsInChildren<SpriteRenderer>();
-            foreach (var sr in renderers)
+            Canvas sortingCanvas = null;
+            foreach (var canvas in parent.GetComponentsInParent<Canvas>(true))
             {
-                sr.sortingLayerName = "UI";
-                sr.sortingOrder = 1000;
+                sortingCanvas = canvas;
+                if (canvas.overrideSorting || canvas.isRootCanvas) break;
             }
+
+            var previewGroup = _currentMonsterInstance.GetComponent<UnityEngine.Rendering.SortingGroup>();
+            if (previewGroup == null)
+                previewGroup = _currentMonsterInstance.AddComponent<UnityEngine.Rendering.SortingGroup>();
+
+            previewGroup.enabled = true;
+            previewGroup.sortingLayerID = sortingCanvas != null ? sortingCanvas.sortingLayerID : 0;
+            previewGroup.sortingOrder = Mathf.Clamp(
+                (sortingCanvas != null ? sortingCanvas.sortingOrder : 6000) + 1, -32768, 32767);
+            // Keep each limb's existing order inside the group for correct animation.
+
 
             // Desativa inteligência artificial e colisão do monstro
             MonsterBrain brain = _currentMonsterInstance.GetComponent<MonsterBrain>();

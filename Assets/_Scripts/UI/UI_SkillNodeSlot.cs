@@ -39,7 +39,7 @@ namespace DungeonKeeper
             // 2. Requisito de Nível
             if (_levelRequirementText != null)
             {
-                _levelRequirementText.text = $"Lv.{node.requiredMonsterLevel}";
+                _levelRequirementText.text = $"Lv.{tree.GetRequiredLevel(node)}";
             }
 
             // 3. Botão
@@ -47,7 +47,7 @@ namespace DungeonKeeper
             {
                 _nodeButton.onClick.RemoveAllListeners();
                 _nodeButton.onClick.AddListener(() => onClickAction?.Invoke());
-                _nodeButton.interactable = true;
+                _nodeButton.interactable = isUnlocked || !isBlocked;
             }
 
             // 4. Hierarquia Visual do Frame (Prioridade: Desbloqueado > Bloqueado > Selecionado no Rascunho > Disponível)

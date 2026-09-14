@@ -62,12 +62,15 @@ namespace DungeonKeeper
 
         public void OpenWindowForLane(MonsterSlot slot)
         {
+            if (UI_WindowCoordinator.Instance != null && UI_WindowCoordinator.Instance.HasOpenWindows)
+                return;
             if (_windowPanel == null)
             {
                 Debug.LogError("[Equip] Atribua Window Panel no Inspector.", this);
                 return;
             }
             _targetLaneSlot = slot;
+            UI_MonsterCollectionPage.ConfigureScrollContent(_monsterListContainer);
             _windowPanel.SetActive(true);
             if (!_ownsPause)
             {
@@ -95,7 +98,11 @@ namespace DungeonKeeper
             // Limpa cards antigos da UI
             foreach (var card in _instantiatedCards)
             {
-                if (card != null) Destroy(card);
+                if (card != null)
+                {
+                    card.SetActive(false);
+                    Destroy(card);
+                }
             }
             _instantiatedCards.Clear();
 
@@ -223,6 +230,8 @@ namespace DungeonKeeper
 
         public void AssignSelectedMonsterToLane(MonsterSlot slot)
         {
+            if (!IsOpen || (UI_WindowCoordinator.Instance != null && UI_WindowCoordinator.Instance.HasOpenWindows))
+                return;
             if (slot == null || _selectedInstance == null || InventoryManager.Instance == null) return;
 
             _targetLaneSlot = slot;

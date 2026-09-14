@@ -259,7 +259,7 @@ namespace DungeonKeeper
         {
             if (target == null || !target.IsAlive) return;
 
-            target.TakeDamage(Mathf.RoundToInt(baseDamage));
+            target.TakeDamage(RollAttackDamage(Mathf.RoundToInt(baseDamage)));
 
             if (target.StatusEffects != null)
             {
@@ -282,6 +282,13 @@ namespace DungeonKeeper
         public List<string> GetUnlockedSkillIDs()
         {
             return _skillTree != null ? _skillTree.GetUnlockedSkillIDs() : new List<string>();
+        }
+
+        public int RollAttackDamage(int damage)
+        {
+            float chance = Mathf.Clamp01(_critChance + (_skillTree?.GetTotalModifier(SkillType.CritChance) ?? 0) / 100f);
+            float multiplier = Mathf.Max(1, _critDamageMultiplier + (_skillTree?.GetTotalModifier(SkillType.CritDamage) ?? 0) / 100f);
+            return UnityEngine.Random.value < chance ? Mathf.RoundToInt(damage * multiplier) : damage;
         }
 
         public bool IsNodeUnlocked(string skillID)

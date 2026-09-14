@@ -9,6 +9,7 @@ namespace DungeonKeeper
         private MonsterData _data;
         private MonsterProgression _progression;
         private Monster _monster;
+        private List<SkillNodeSO> _availableNodes = new List<SkillNodeSO>();
 
         public event Action OnSkillTreeUpdated;
 
@@ -18,7 +19,7 @@ namespace DungeonKeeper
         {
             get
             {
-                return _data != null ? _data.availableSkills : Array.Empty<SkillNodeSO>();
+                return _availableNodes;
             }
         }
 
@@ -27,7 +28,7 @@ namespace DungeonKeeper
             get
             {
                 if (_progression == null || _data == null) return 0;
-                return _progression.GetAvailablePoints(_data.availableSkills);
+                return _progression.GetAvailablePoints(_availableNodes);
             }
         }
 
@@ -42,6 +43,7 @@ namespace DungeonKeeper
             _progression = progression ?? new MonsterProgression();
             _progression.unlockedSkillIDs ??= new List<string>();
             _progression.claimedRewards ??= new List<ClaimedReward>();
+            _availableNodes = _progression.ResolveTalents(data, _monster != null ? _monster.MaxLevel : 0);
 
 
             ApplySkillModifiers();
@@ -55,17 +57,39 @@ namespace DungeonKeeper
                 _progression.currentLevel = newLevel;
             }
 
+            ApplySkillModifiers();
             OnSkillTreeUpdated?.Invoke();
+        }
+
+        public int GetRequiredLevel(SkillNodeSO node)
+        {
+            int index = _availableNodes.IndexOf(node);
+            if (node == null || index < 0) return int.MaxValue;
+            int level = 1;
+            for (int row = 0; row <= index / 2; row++)
+            {
+                level++;
+                for (int side = 0; side < 2; side++)
+                {
+                    int slot = row * 2 + side;
+                    if (slot < _availableNodes.Count && _availableNodes[slot] != null)
+                        level = Mathf.Max(level, _availableNodes[slot].requiredMonsterLevel);
+                }
+            }
+            return level;
         }
 
         public bool CanUnlockNodeInRow(SkillNodeSO clickedNode, SkillNodeSO oppositeNodeInRow)
         {
             if (clickedNode == null || _data == null || _progression == null) return false;
-            if (_data.availableSkills == null) return false;
+            if (!_availableNodes.Contains(clickedNode)) return false;
+            int index = _availableNodes.IndexOf(clickedNode);
+            int oppositeIndex = index % 2 == 0 ? index + 1 : index - 1;
+            oppositeNodeInRow = oppositeIndex < _availableNodes.Count ? _availableNodes[oppositeIndex] : null;
 
 
             // 1. Checa nível e se já foi comprado
-            if (_monster.CurrentLevel < clickedNode.requiredMonsterLevel) return false;
+            if (_progression.currentLevel < GetRequiredLevel(clickedNode)) return false;
             if (_progression.IsSkillUnlocked(clickedNode.skillID)) return false;
 
             // 2. Trava de Exclusão Mútua da Linha
@@ -83,32 +107,38 @@ namespace DungeonKeeper
             if (!CanUnlockNodeInRow(node, oppositeNodeInRow)) return false;
 
             // Altera exclusivamente o estado individual
-            _progression.ClaimReward(node.requiredMonsterLevel, node.skillID);
+            _progression.ClaimReward(GetRequiredLevel(node), node.skillID);
 
             ApplySkillModifiers();
             OnSkillTreeUpdated?.Invoke();
 
-            Debug.Log($"🌳 Habilidade '{node.skillName}' desbloqueada para {_monster.name}!");
+            Debug.Log($"🌳 Habilidade '{node.skillName}' desbloqueada para {_data.displayName}!");
             return true;
         }
 
         public void ApplySkillModifiers()
         {
             if (_monster == null || _data == null || _progression == null) return;
-
-            TryRecalculateBaseStats(_monster);
+            // Rebuild from base values: re-opening the UI must not add bonuses again.
+            Stats baseline = _data.GetStatsForLevel(_progression.currentLevel);
+            var stats = _monster.Stats;
+            if (stats == null) return;
+            stats.attackPower = Mathf.RoundToInt(baseline.attackPower * (1 + GetTotalModifier(SkillType.PercentDamage) / 100f)
+                + GetTotalModifier(SkillType.FlatDamage));
+            stats.maxHP = Mathf.Max(1, Mathf.RoundToInt(baseline.maxHP * (1 + GetTotalModifier(SkillType.PercentHealth) / 100f)
+                + GetTotalModifier(SkillType.FlatHealth)));
+            stats.attackSpeed = baseline.attackSpeed + GetTotalModifier(SkillType.AttackSpeed);
+            stats.moveSpeed = baseline.moveSpeed + GetTotalModifier(SkillType.MovementSpeed);
+            if (_monster.Health != null) _monster.Health.ModifyMaxHealth(stats.maxHP - _monster.Health.MaxHP);
+            GetComponent<MeleeSkill>()?.ResetTalentUpgrades();
 
             foreach (string skillID in _progression.unlockedSkillIDs)
             {
-                SkillNodeSO node = _data.availableSkills.Find(n => n != null && n.skillID == skillID);
+                SkillNodeSO node = _availableNodes.Find(n => n != null && n.skillID == skillID);
                 if (node == null) continue;
 
                 switch (node.rewardType)
                 {
-                    case RewardType.ModifierChoice:
-                        ApplyStatusModifier(node);
-                        break;
-
                     case RewardType.SkillUpgrade:
                         ApplyCombatSkillUpgrade(node);
                         break;
@@ -116,35 +146,14 @@ namespace DungeonKeeper
             }
         }
 
-        private void TryRecalculateBaseStats(Monster monster)
+        public float GetTotalModifier(SkillType type)
         {
-            if (monster == null) return;
-
-            var method = monster.GetType().GetMethod(
-                "RecalculateBaseStats",
-                System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.Public |
-                System.Reflection.BindingFlags.NonPublic);
-
-            method?.Invoke(monster, null);
-        }
-
-        private void ApplyStatusModifier(SkillNodeSO node)
-        {
-            switch (node.skillType)
-            {
-                case SkillType.FlatHealth:
-                    _monster.Health?.ModifyMaxHealth(node.modifierValue);
-                    break;
-
-                case SkillType.PercentDamage:
-                    _monster.Stats.attackPower += Mathf.RoundToInt(_monster.Stats.attackPower * (node.modifierValue / 100f));
-                    break;
-
-                case SkillType.AttackSpeed:
-                    _monster.Stats.attackSpeed += node.modifierValue;
-                    break;
-            }
+            float total = 0;
+            if (_progression == null) return total;
+            foreach (var node in _availableNodes)
+                if (node != null && node.rewardType == RewardType.ModifierChoice && node.skillType == type &&
+                    _progression.IsSkillUnlocked(node.skillID)) total += node.modifierValue;
+            return total;
         }
 
         private void ApplyCombatSkillUpgrade(SkillNodeSO node)
@@ -175,6 +184,7 @@ namespace DungeonKeeper
         {
             if (progression == null) return;
             _progression = progression;
+            _availableNodes = _progression.ResolveTalents(_data);
             ApplySkillModifiers();
             OnSkillTreeUpdated?.Invoke();
         }

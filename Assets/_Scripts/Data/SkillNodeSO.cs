@@ -59,6 +59,10 @@ namespace DungeonKeeper
 
         public Sprite icon;
 
+        [Header("Sorteio no nascimento")]
+        [Range(1, 3)] public int tier = 1;
+        [Min(0)] public int rollWeight = 1;
+
         [Header("Categoria da Recompensa")]
         public RewardType rewardType = RewardType.ModifierChoice; // Define o comportamento do nó na UI
 

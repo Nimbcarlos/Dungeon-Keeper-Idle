@@ -29,6 +29,65 @@ namespace DungeonKeeper
 
         private Action<MonsterInstance> _onSelected;
         private Action<MonsterInstance> _onInfo;
+        private Outline _collectionOutline;
+
+        // Collection cards use the page's 300 x 200 cells instead of the wide slot layout.
+        public void UseCollectionLayout()
+        {
+            var background = GetComponent<Image>();
+            if (background != null) background.color = new Color(0.16f, 0.19f, 0.25f, 1f);
+            _collectionOutline = gameObject.AddComponent<Outline>();
+            _collectionOutline.effectColor = new Color(1f, 0.78f, 0.32f);
+            _collectionOutline.effectDistance = new Vector2(2, -2);
+            _collectionOutline.enabled = false;
+            foreach (var layout in GetComponentsInChildren<LayoutGroup>(true))
+                layout.enabled = false;
+
+            Place(_iconImage, 20, 16, 112, 112);
+            if (_iconImage != null) _iconImage.preserveAspect = true;
+            PlaceText(_nameText, 148, 12, -168, 112, 40, true);
+            PlaceText(_qualityText, 20, 140, -160, 44, 36);
+            PlaceText(_levelText, -132, 140, 112, 44, 36);
+            PlaceText(_locationText, 20, 190, -40, 44, 36);
+            PlaceText(_xpText, 20, 240, -40, 44, 36);
+            if (_xpSlider != null)
+            {
+                Place(_xpSlider, 20, 294, -40, 14);
+                _xpSlider.direction = Slider.Direction.LeftToRight;
+            }
+            // Selecting the card already opens the same details in this page.
+            if (_infoButton != null) _infoButton.gameObject.SetActive(false);
+        }
+
+        private void Place(Component component, float x, float y, float width, float height)
+        {
+            if (component == null) return;
+            var rect = component.transform as RectTransform;
+            if (rect == null) return;
+            rect.SetParent(transform, false);
+            rect.localScale = Vector3.one;
+            rect.anchorMin = new Vector2(x < 0 ? 1 : 0, 1);
+            rect.anchorMax = new Vector2(width < 0 || x < 0 ? 1 : 0, 1);
+            rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = new Vector2(x, -y);
+            rect.sizeDelta = new Vector2(width, height);
+        }
+
+        private void PlaceText(TextMeshProUGUI label, float x, float y,
+            float width, float height, float size, bool title = false)
+        {
+            if (label == null) return;
+            Place(label, x, y, width, height);
+            label.enableAutoSizing = false;
+            label.fontSize = size;
+            label.fontStyle = title ? FontStyles.Bold : FontStyles.Normal;
+            label.alignment = TextAlignmentOptions.MidlineLeft;
+            label.textWrappingMode = title ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            label.margin = Vector4.zero;
+            label.color = title ? Color.white : new Color(0.88f, 0.9f, 0.94f);
+            label.raycastTarget = false;
+        }
 
         public void Setup(
             MonsterInstance instance,
@@ -153,6 +212,7 @@ namespace DungeonKeeper
 
         public void SetSelected(bool selected)
         {
+            if (_collectionOutline != null) _collectionOutline.enabled = selected;
             if (_selectionHighlight != null)
                 _selectionHighlight.SetActive(selected);
         }

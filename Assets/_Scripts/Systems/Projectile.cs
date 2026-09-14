@@ -231,7 +231,8 @@ namespace DungeonKeeper
             if (isTarget && !isWall)
             {
                 IDamageable target = other.GetComponent<IDamageable>();
-                target.TakeDamage(Damage);
+                var monsterOwner = _owner != null ? _owner.GetComponent<Monster>() : null;
+                target.TakeDamage(monsterOwner != null ? monsterOwner.RollAttackDamage(Damage) : Damage);
                 // Debug.Log($"Projétil acertou {other.name} por {Damage} de dano.");
 
                 if (_data != null && _data.impactVFX != null)

@@ -19,6 +19,7 @@ namespace DungeonKeeper
                 maxHP        = this.maxHP,
                 attackPower  = this.attackPower,
                 attackSpeed  = this.attackSpeed,
+                detectionRange = this.detectionRange,
                 attackRange  = this.attackRange,
                 moveSpeed    = this.moveSpeed
             };

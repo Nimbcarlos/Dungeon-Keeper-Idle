@@ -14,6 +14,7 @@ namespace DungeonKeeper
         [SerializeField] private bool _hideButtons = true;
 
         private readonly HashSet<MonoBehaviour> _openWindows = new();
+        public bool HasOpenWindows => _openWindows.Count > 0;
 
         private bool _locked;
         private float _previousTimeScale;
@@ -35,7 +36,16 @@ namespace DungeonKeeper
 
         public void RegisterWindow(MonoBehaviour window)
         {
-            if (window == null || !_openWindows.Add(window))
+            if (window == null) return;
+
+            // End lane selection before capturing the modal pause state.
+            // Otherwise the equipment window remains above the new window's raycasts,
+            // and the coordinator can accidentally remember its paused time scale.
+            var equipment = UI_MonsterInventoryWindow.Instance;
+            if (equipment != null && equipment != window && equipment.IsOpen)
+                equipment.CloseWindow();
+
+            if (!_openWindows.Add(window))
                 return;
 
             if (_locked) return;

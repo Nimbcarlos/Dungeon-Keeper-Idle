@@ -46,6 +46,14 @@ namespace DungeonKeeper
             _cooldownReduction += cdr;
         }
 
+        public void ResetTalentUpgrades()
+        {
+            _bonusDamage = 0;
+            _bonusRange = 0;
+            _bonusCleave = 0;
+            _cooldownReduction = 0;
+        }
+
         private void TryPerformAttack()
         {
             ITargetable target = FindClosestTarget();
@@ -82,7 +90,7 @@ namespace DungeonKeeper
                     Hero hero = col.GetComponent<Hero>();
                     if (hero != null && hero.IsAlive)
                     {
-                        hero.TakeDamage(finalDamage);
+                        hero.TakeDamage(GetComponent<Monster>().RollAttackDamage(finalDamage));
                         ApplyKnockback(hero.transform);
                         hitCount++;
                     }

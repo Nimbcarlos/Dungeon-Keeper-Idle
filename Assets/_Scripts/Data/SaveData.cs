@@ -10,6 +10,8 @@ namespace DungeonKeeper
         // 💰 Economia Base
         public int gold;
         public int essence;
+        public List<SummoningItemSaveEntry> summoningItems = new List<SummoningItemSaveEntry>();
+        public List<SummoningSaveEntry> summoningSlots = new List<SummoningSaveEntry>();
 
         // Fichas vivas salvas no inventário do jogador
         public List<MonsterInstance> ownedInstances = new List<MonsterInstance>();

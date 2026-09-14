@@ -65,9 +65,13 @@ namespace DungeonKeeper
                 return;
             }
 
+            // Also close lane selection in scenes without a window coordinator.
+            if (UI_MonsterInventoryWindow.Instance != null && UI_MonsterInventoryWindow.Instance.IsOpen)
+                UI_MonsterInventoryWindow.Instance.CloseWindow();
+
             if (IsOpen) return;
 
-            UI_WindowCoordinator.Instance.RegisterWindow(this);
+            UI_WindowCoordinator.Instance?.RegisterWindow(this);
 
             // Define a página antes de ativar a janela.
             ShowMonsters();
@@ -84,7 +88,7 @@ namespace DungeonKeeper
             if (_windowPanel != null)
                 _windowPanel.SetActive(false);
 
-            UI_WindowCoordinator.Instance.UnregisterWindow(this);
+            UI_WindowCoordinator.Instance?.UnregisterWindow(this);
         }
 
         public void ShowMonsters()
@@ -160,7 +164,7 @@ namespace DungeonKeeper
                 : 0;
 
             _capacityText.text =
-                $"Monsters: {count} / {_monsterCapacity}";
+                $"Monsters: {count} / {(SummoningManager.Instance != null ? SummoningManager.Instance.MonsterCapacity : _monsterCapacity)}";
         }
 
         private void OnDisable()
@@ -171,7 +175,7 @@ namespace DungeonKeeper
         private void OnDestroy()
         {
             UnsubscribeInventory();
-            UI_WindowCoordinator.Instance.UnregisterWindow(this);
+            UI_WindowCoordinator.Instance?.UnregisterWindow(this);
 
             if (_closeButton != null)
                 _closeButton.onClick.RemoveListener(CloseWindow);

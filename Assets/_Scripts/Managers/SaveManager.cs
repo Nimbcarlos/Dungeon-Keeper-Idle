@@ -11,6 +11,10 @@ namespace DungeonKeeper
 
         private bool _loaded;
         private InventoryManager _inventory;
+        private SummoningItemInventory _items;
+        private bool _pendingSave;
+        private void MarkSavePending() => _pendingSave = true;
+        private void LateUpdate() { if (_pendingSave) { _pendingSave = false; SaveGame(); } }
 
         private void OnApplicationPause(bool paused)
         {
@@ -26,6 +30,7 @@ namespace DungeonKeeper
         {
             if (_inventory != null)
                 _inventory.OnInventoryChanged -= SaveGame;
+            if (_items != null) _items.OnInventoryChanged -= MarkSavePending;
             if (Instance == this) Instance = null;
         }
 
@@ -43,6 +48,8 @@ namespace DungeonKeeper
         public void SaveGame()
         {
             if (!_loaded || InventoryManager.Instance == null) return;
+            if (SummoningManager.Instance != null && SummoningManager.Instance.IsBusy) { _pendingSave = true; return; }
+            _pendingSave = false;
             // Preserva os campos que este manager ainda nao gerencia (ovos, skins).
             SaveData data = CurrentData ?? new SaveData();
             data.laneDeployments = new List<LaneSaveState>();
@@ -79,6 +86,8 @@ namespace DungeonKeeper
                 }
             }
 
+            if (SummoningItemInventory.Instance != null) data.summoningItems = SummoningItemInventory.Instance.CaptureState();
+            if (SummoningManager.Instance != null) data.summoningSlots = SummoningManager.Instance.CaptureState();
             SaveSystem.Save(data);
             CurrentData = data;
         }
@@ -86,17 +95,23 @@ namespace DungeonKeeper
         public void LoadGame()
         {
             _loaded = false;
+            _pendingSave = false;
             CurrentData = SaveSystem.Load();
             ApplyLoadedData();
             _loaded = InventoryManager.Instance != null;
             if (_inventory != null) _inventory.OnInventoryChanged -= SaveGame;
             _inventory = InventoryManager.Instance;
             if (_inventory != null) _inventory.OnInventoryChanged += SaveGame;
+            if (_items != null) _items.OnInventoryChanged -= MarkSavePending;
+            _items = SummoningItemInventory.Instance;
+            if (_items != null) _items.OnInventoryChanged += MarkSavePending;
         }
 
         private void ApplyLoadedData()
         {
             if (CurrentData == null) return;
+            SummoningItemInventory.Instance?.RestoreState(CurrentData.summoningItems);
+            SummoningManager.Instance?.RestoreState(CurrentData.summoningSlots);
 
             // 1. Restaura Recursos
             ResourceManager.Instance?.SetGold(CurrentData.gold);

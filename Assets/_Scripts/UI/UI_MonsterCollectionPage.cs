@@ -39,9 +39,108 @@ namespace DungeonKeeper
 
         private InventoryManager _inventory;
         private MonsterInstance _selected;
+        private bool _showingTalents;
+        private Vector2 _layoutSize;
+
+        private void ConfigureReadableLayout()
+        {
+            var page = transform as RectTransform;
+            if (page == null || page.rect.width <= 0 || page.rect.height <= 0) return;
+            if (_layoutSize == page.rect.size) return;
+            _layoutSize = page.rect.size;
+            var scroll = _content != null ? _content.GetComponentInParent<ScrollRect>(true) : null;
+            if (scroll != null)
+                Fit(scroll.transform as RectTransform, page, 0, .35f, 16, 16, 16, 16);
+            var details = _detailsPanel != null ? _detailsPanel.transform as RectTransform : null;
+            if (details == null) return;
+            Fit(details, page, .35f, 1, 24, 16, 16, 16);
+            // Keep the preview in the header, leaving the body for the selected tab.
+            if (_monsterDisplay != null)
+                Top(_monsterDisplay.transform as RectTransform, details, 0, 0, 160, 160);
+            if (_nameText != null)
+            {
+                Top(_nameText.rectTransform, details, 180, 0, -180, 64);
+                ReadableText(_nameText, 42);
+            }
+            if (_summaryText != null)
+            {
+                Top(_summaryText.rectTransform, details, 180, 68, -180, 84);
+                ReadableText(_summaryText, 34);
+            }
+            ConfigureTabButton(_statsButton, details, 0, .49f);
+            ConfigureTabButton(_talentsButton, details, .51f, 1);
+            if (_statsPanel != null) Fit(_statsPanel.transform as RectTransform, details, 0, 1, 0, 0, 288, 0);
+            if (_talentsPanel != null) Fit(_talentsPanel.transform as RectTransform, details, 0, 1, 0, 0, 288, 0);
+            if (_statsView != null) _statsView.UseReadableLayout();
+        }
+
+        private static void ReadableText(TextMeshProUGUI text, float size)
+        {
+            text.enableAutoSizing = false;
+            text.fontSize = size;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.raycastTarget = false;
+        }
+
+        private static void ConfigureTabButton(Button button, RectTransform parent, float min, float max)
+        {
+            if (button == null) return;
+            var rect = button.transform as RectTransform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(min, 1);
+            rect.anchorMax = new Vector2(max, 1);
+            rect.pivot = new Vector2(.5f, 1);
+            rect.anchoredPosition = new Vector2(0, -168);
+            rect.sizeDelta = new Vector2(0, 108);
+            foreach (var label in button.GetComponentsInChildren<TextMeshProUGUI>(true)) ReadableText(label, 38);
+        }
+
+        private static void Fit(RectTransform rect, RectTransform parent, float min, float max,
+            float left, float right, float top, float bottom)
+        {
+            if (rect == null) return;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(min, 0);
+            rect.anchorMax = new Vector2(max, 1);
+            rect.offsetMin = new Vector2(left, bottom);
+            rect.offsetMax = new Vector2(-right, -top);
+            rect.localScale = Vector3.one;
+        }
+
+        private static void Top(RectTransform rect, RectTransform parent, float x, float y, float width, float height)
+        {
+            if (rect == null) return;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = new Vector2(width < 0 ? 1 : 0, 1);
+            rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = new Vector2(x, -y);
+            rect.sizeDelta = new Vector2(width, height);
+            rect.localScale = Vector3.one;
+        }
+
+        private void LateUpdate()
+        {
+            ConfigureReadableLayout();
+            if (_content == null) return;
+            var grid = _content.GetComponent<GridLayoutGroup>();
+            var rect = _content as RectTransform;
+            if (grid == null || rect == null) return;
+            float width = rect.rect.width - grid.padding.horizontal;
+            if (width <= 0) return;
+            int columns = Mathf.Max(1, Mathf.FloorToInt((width + 20f) / 540f));
+            var size = new Vector2((width - (columns - 1) * 20f) / columns, 320f);
+            if (grid.constraint != GridLayoutGroup.Constraint.FixedColumnCount)
+                grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            if (grid.constraintCount != columns) grid.constraintCount = columns;
+            if (grid.cellSize != size) grid.cellSize = size;
+            if (grid.spacing != new Vector2(20, 20)) grid.spacing = new Vector2(20, 20);
+        }
 
         private void Awake()
         {
+            ConfigureScrollContent(_content);
+            ConfigureReadableLayout();
             if (_statsButton != null)
                 _statsButton.onClick.AddListener(ShowStats);
 
@@ -49,6 +148,29 @@ namespace DungeonKeeper
                 _talentsButton.onClick.AddListener(ShowTalents);
 
             ShowStats();
+        }
+
+        public static void ConfigureScrollContent(Transform content)
+        {
+            var rect = content as RectTransform;
+            if (rect == null) return;
+            var scroll = content.GetComponentInParent<ScrollRect>(true);
+            if (scroll == null) return;
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(.5f, 1);
+            rect.sizeDelta = new Vector2(0, rect.sizeDelta.y);
+            rect.anchoredPosition = new Vector2(0, rect.anchoredPosition.y);
+            var fitter = content.GetComponent<ContentSizeFitter>();
+            if (fitter == null) fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.enabled = true;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.content = rect;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25;
         }
 
         private void OnEnable()
@@ -66,6 +188,7 @@ namespace DungeonKeeper
 
         private void OnDisable()
         {
+            if (_skillTreeView != null) _skillTreeView.CloseWindow();
             DisconnectInventory();
 
             if (_monsterDisplay != null)
@@ -150,6 +273,8 @@ namespace DungeonKeeper
                 UI_MonsterListItem card =
                     Instantiate(_cardPrefab, _content);
 
+                card.UseCollectionLayout();
+
                 card.Setup(
                     instance,
                     database,
@@ -184,7 +309,7 @@ namespace DungeonKeeper
             _cardInstances.Clear();
         }
 
-        private void SelectMonster(MonsterInstance instance)
+        public void SelectMonster(MonsterInstance instance)
         {
             _selected = instance;
             UpdateSelection();
@@ -231,6 +356,7 @@ namespace DungeonKeeper
 
             if (data == null)
             {
+                if (_skillTreeView != null) _skillTreeView.CloseWindow();
                 if (_monsterDisplay != null)
                     _monsterDisplay.ClearDisplay();
 
@@ -270,6 +396,7 @@ namespace DungeonKeeper
 
             if (_statsView != null)
                 _statsView.Display(data.GetStatsForLevel(level));
+            if (_showingTalents) RefreshTalents();
         }
 
         public void ShowStats()
@@ -281,10 +408,36 @@ namespace DungeonKeeper
         public void ShowTalents()
         {
             SetDetailsTab(true);
+            RefreshTalents();
+        }
+
+        private void RefreshTalents()
+        {
+            if (_skillTreeView != null && _inventory != null)
+            {
+                if (_statsPanel != null && _talentsPanel != null)
+                {
+                    var stats = _statsPanel.transform as RectTransform;
+                    var talents = _talentsPanel.transform as RectTransform;
+                    if (stats != null && talents != null)
+                    {
+                        talents.SetParent(stats.parent, false);
+                        talents.anchorMin = stats.anchorMin;
+                        talents.anchorMax = stats.anchorMax;
+                        talents.pivot = stats.pivot;
+                        talents.anchoredPosition = stats.anchoredPosition;
+                        talents.sizeDelta = stats.sizeDelta;
+                        talents.localScale = stats.localScale;
+                        _skillTreeView.UseEmbeddedLayout(talents);
+                    }
+                }
+                _skillTreeView.OpenWindowForInstance(_selected, _inventory.GetDatabase());
+            }
         }
 
         private void SetDetailsTab(bool talents)
         {
+            _showingTalents = talents;
             if (_statsPanel != null)
                 _statsPanel.SetActive(!talents);
 

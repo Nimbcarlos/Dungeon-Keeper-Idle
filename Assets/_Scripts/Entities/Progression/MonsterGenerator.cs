@@ -33,6 +33,7 @@ namespace DungeonKeeper
 
             Debug.Log($"🐣 [Hatchery] Nasceu um {baseData.displayName} ({quality})!");
 
+            progression.ResolveTalents(baseData, 10 * ((int)quality + 1));
             return (baseData, progression, quality, affixData);
         }
 
