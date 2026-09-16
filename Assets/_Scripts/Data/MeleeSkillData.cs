@@ -7,6 +7,8 @@ namespace DungeonKeeper
     {
         [Header("Visual & SFX")]
         public Sprite attackVFXSprite;
+        public GameObject attackVFXPrefab;
+        public bool placeVFXAtFeet;
         public AudioClip swingSFX;
         public AudioClip hitSFX;
 

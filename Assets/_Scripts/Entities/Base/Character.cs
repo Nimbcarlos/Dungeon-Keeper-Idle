@@ -16,6 +16,8 @@ namespace DungeonKeeper
         [SerializeField] private Transform _feetPoint;
         [SerializeField] private Transform _combatPoint;
         [SerializeField] private Transform _headPoint;
+        [SerializeField] private Transform _meleePoint;
+        [SerializeField] private Transform _rangedPoint;
         
         [Header("UI Prefabs")]
         [SerializeField] private GameObject _healthBarPrefab;
@@ -24,6 +26,9 @@ namespace DungeonKeeper
         public Transform FeetPoint   => _feetPoint   != null ? _feetPoint   : transform;
         public Transform CombatPoint => _combatPoint  != null ? _combatPoint  : transform;
         public Transform HeadPoint   => _headPoint   != null ? _headPoint   : transform;
+
+        public Transform MeleePoint => _meleePoint != null ? _meleePoint : CombatPoint;
+        public Transform RangedPoint => _rangedPoint != null ? _rangedPoint : CombatPoint;
 
         protected override void Awake()
         {

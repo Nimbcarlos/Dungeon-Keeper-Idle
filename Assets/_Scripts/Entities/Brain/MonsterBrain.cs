@@ -15,6 +15,7 @@ namespace DungeonKeeper
         private Monster _monster;
 
         private const float Y_THRESHOLD = 0.12f;
+        private bool IsRanged => _monster != null && _monster.EffectiveAttackType == AttackType.Ranged;
 
         private Vector2 MyFeetPos => character.FeetPoint != null ? (Vector2)character.FeetPoint.position : (Vector2)transform.position;
 
@@ -63,9 +64,17 @@ namespace DungeonKeeper
 
             Vector2 targetFeetPos = GetEntityFeetPos(closest);
 
-            if (IsTargetInAttackRange(targetFeetPos))
+            if (IsTargetInAttackRange(closest))
             {
                 SetState(BrainState.Combat);
+                return;
+            }
+
+            if (IsRanged)
+            {
+                // Ranged guards its post instead of chasing a detected hero.
+                SetState(BrainState.Returning);
+                HandleReturning(closest);
                 return;
             }
 
@@ -86,7 +95,7 @@ namespace DungeonKeeper
 
             Vector2 targetFeetPos = GetEntityFeetPos(closest);
 
-            if (!IsTargetInAttackRange(targetFeetPos))
+            if (!IsTargetInAttackRange(closest))
             {
                 StopAttack();
                 SetState(BrainState.Alert);
@@ -99,14 +108,22 @@ namespace DungeonKeeper
             _attackTimer -= Time.deltaTime;
             if (_attackTimer <= 0f && !_isAttacking)
             {
-                _attackTimer = 1f / character.Stats.attackSpeed;
+                var melee = GetComponent<MeleeSkill>();
+                _attackTimer = _monster.Data != null && _monster.EffectiveAttackType == AttackType.Melee && _monster.ActiveMeleeData != null && melee != null
+                    ? melee.AttackInterval : 1f / Mathf.Max(0.1f, character.Stats.attackSpeed);
+                if (_monster.Data != null && _monster.EffectiveAttackType == AttackType.Ranged)
+                {
+                    var ranged = GetComponent<ProjectileSkill>();
+                    if (ranged != null) _attackTimer = ranged.AttackInterval;
+                }
                 StartCoroutine(AttackRoutine(closest));
             }
         }
 
         private void HandleReturning(Hero closest)
         {
-            if (closest != null && IsInDetectionRange(closest))
+            if (closest != null && IsInDetectionRange(closest) &&
+                (!IsRanged || IsTargetInAttackRange(closest)))
             {
                 SetState(BrainState.Alert);
                 return;
@@ -114,7 +131,7 @@ namespace DungeonKeeper
 
             Vector2 slotPos = _monster.GuardPosition;
 
-            if (Vector2.Distance(MyFeetPos, slotPos) <= 0.05f)
+            if (Vector2.Distance((Vector2)transform.position, slotPos) <= 0.05f)
             {
                 transform.position = slotPos;
                 ExecuteMovement(Vector2.zero, 1f); // Olha para a direita ao chegar
@@ -122,7 +139,7 @@ namespace DungeonKeeper
                 return;
             }
 
-            Vector2 moveDir = CalculateTwoPhaseMovement(MyFeetPos, slotPos);
+            Vector2 moveDir = CalculateTwoPhaseMovement(transform.position, slotPos);
             float lookDir = moveDir.x != 0 ? moveDir.x : (slotPos.x - MyFeetPos.x);
 
             ExecuteMovement(moveDir, lookDir);
@@ -195,8 +212,17 @@ namespace DungeonKeeper
             return Vector2.Distance(MyFeetPos, GetEntityFeetPos(hero)) <= character.Stats.detectionRange;
         }
 
-        private bool IsTargetInAttackRange(Vector2 targetFeetPos)
+        private bool IsTargetInAttackRange(Character target)
         {
+            if (target == null) return false;
+            if (IsRanged)
+            {
+                // Match ProjectileSkill.TryFire, including shots across lanes.
+                Vector2 delta = target.CombatPoint.position - character.CombatPoint.position;
+                return delta.sqrMagnitude <= character.Stats.attackRange * character.Stats.attackRange;
+            }
+
+            Vector2 targetFeetPos = GetEntityFeetPos(target);
             float diffX = Mathf.Abs(MyFeetPos.x - targetFeetPos.x);
             float diffY = Mathf.Abs(MyFeetPos.y - targetFeetPos.y);
             return diffX <= character.Stats.attackRange && diffY <= Y_THRESHOLD;
@@ -211,7 +237,9 @@ namespace DungeonKeeper
             foreach (Hero h in heroes)
             {
                 if (h == null || !h.IsAlive) continue;
-                float dist = Vector2.Distance(MyFeetPos, GetEntityFeetPos(h));
+                float dist = IsRanged
+                    ? Vector2.Distance(character.CombatPoint.position, h.CombatPoint.position)
+                    : Vector2.Distance(MyFeetPos, GetEntityFeetPos(h));
                 if (dist < minDist) { minDist = dist; closest = h; }
             }
             return closest;
@@ -222,7 +250,7 @@ namespace DungeonKeeper
             _isAttacking = true;
             character.Animator?.SetTrigger("attack");
 
-            float totalDuration = 1f / character.Stats.attackSpeed;
+            float totalDuration = 1f / Mathf.Max(0.1f, character.Stats.attackSpeed);
             float impactTime    = totalDuration * 0.4f;
             float recoveryTime  = totalDuration * 0.6f;
 

@@ -3,164 +3,123 @@ using DungeonKeeper;
 
 public class ProjectileSkill : MonoBehaviour
 {
-    [Header("Projectile")]
     [SerializeField] private ProjectileData _projectileData;
-
-    [Header("Skill")]
     [SerializeField] private float _cooldown = 3f;
-
     private Character _character;
-    private float     _timer;
+    private float _timer;
+    private bool _piercing, _bounceEnabled, _volleyEnabled, _homingEnabled;
+    private int _volleyBonus, _damageBonus, _bounceBonus;
+    private float _spreadBonus, _speedBonus, _cooldownReduction;
 
-    // adiciona esses campos privados
-    private bool  _piercing;
-    private bool  _bounceEnabled;
-    private int   _volleyBonus;
-    private float _spreadBonus;
-    private int   _damageBonus;
-    private float _speedBonus;
-    private float _cooldownReduction;
-    private int   _bounceBonus;
+    public float AttackInterval => Mathf.Max(0.2f, _cooldown - _cooldownReduction);
 
-    void Awake()
+    private void Awake() { _character = GetComponent<Character>(); }
+
+    public void Initialize(ProjectileData data, float cooldown)
     {
-        _character = GetComponent<Character>();
+        _projectileData = data;
+        _cooldown = Mathf.Max(0.2f, cooldown);
+        _timer = 0f;
     }
 
-    void Update()
+    public void ResetTalentUpgrades()
     {
+        _piercing = _bounceEnabled = _volleyEnabled = _homingEnabled = false;
+        _volleyBonus = _damageBonus = _bounceBonus = 0;
+        _spreadBonus = _speedBonus = _cooldownReduction = 0f;
+    }
+
+    private void Update()
+    {
+        // A monster with a brain fires at its animation impact, not from a second timer.
+        if (GetComponent<MonsterBrain>() != null || _projectileData == null ||
+            _character == null || !_character.IsAlive || _character.Stats == null) return;
         _timer -= Time.deltaTime;
-        if (_timer <= 0f)
-        {
-            _timer = _cooldown;
-            Fire();
-        }
+        if (_timer <= 0f && TryFire(FindTarget())) _timer = AttackInterval;
     }
 
     public void ApplyUpgrade(SkillUpgrade upgrade)
     {
-        if (upgrade.enablePiercing)    _piercing          = true;
-        if (upgrade.enableBounce)      _bounceEnabled     = true;
-        if (upgrade.enableVolley)      _projectileData.useVolley = true;
-        if (upgrade.enableHoming)      _projectileData.behavior  = ProjectileBehavior.Homing;
-
-        _volleyBonus       += upgrade.volleyCountBonus;
-        _spreadBonus       += upgrade.spreadAngleBonus;
-        _damageBonus       += upgrade.damageBonus;
-        _speedBonus        += upgrade.speedBonus;
+        if (upgrade == null) return;
+        _piercing |= upgrade.enablePiercing;
+        _bounceEnabled |= upgrade.enableBounce;
+        _volleyEnabled |= upgrade.enableVolley;
+        _homingEnabled |= upgrade.enableHoming;
+        _volleyBonus += upgrade.volleyCountBonus;
+        _spreadBonus += upgrade.spreadAngleBonus;
+        _damageBonus += upgrade.damageBonus;
+        _speedBonus += upgrade.speedBonus;
         _cooldownReduction += upgrade.cooldownReduction;
-        _bounceBonus       += upgrade.maxBounceBonus;
+        _bounceBonus += upgrade.maxBounceBonus;
     }
 
-    void Fire()
+    public bool TryFire(Character target)
     {
-        ITargetable target = FindTarget();
-        if (target == null) return;
-
-        Vector2 baseDir = ((Vector2)target.Transform.position
-            - (Vector2)_character.CombatPoint.position).normalized;
-
-        if (_projectileData.useVolley)
-            FireVolley(baseDir, target);
-        else
-            FireProjectile(baseDir, target);
-    }
-
-    void FireVolley(Vector2 baseDir, ITargetable target)
-    {
-        int   count  = _projectileData.volleyCount;
-        float spread = _projectileData.spreadAngle;
-
-        if (count <= 1)
-        {
-            FireProjectile(baseDir, target);
-            return;
-        }
-
-        float startAngle = -(spread * 0.5f);
-        float step       = spread / (count - 1);
-
+        if (_projectileData == null || _projectileData.prefab == null ||
+            _character == null || !_character.IsAlive || _character.Stats == null || !IsEnemy(target)) return false;
+        Vector2 delta = target.CombatPoint.position - _character.CombatPoint.position;
+        if (delta.sqrMagnitude > _character.Stats.attackRange * _character.Stats.attackRange) return false;
+        Vector2 offset = _projectileData.spawnOffset;
+        offset.x *= delta.x < 0f ? -1f : 1f;
+        Vector3 spawnPosition = _character.RangedPoint.position + (Vector3)offset;
+        delta = target.CombatPoint.position - spawnPosition;
+        Vector2 direction = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector2.right;
+        int baseCount = _projectileData.useVolley || _volleyEnabled ? _projectileData.volleyCount : 1;
+        int count = Mathf.Max(1, baseCount + _volleyBonus);
+        float spread = Mathf.Clamp(_projectileData.spreadAngle + _spreadBonus, 0f, 360f);
         for (int i = 0; i < count; i++)
         {
-            float   angle = startAngle + step * i;
-            Vector2 dir   = RotateVector(baseDir, angle);
-            FireProjectile(dir, target);
+            float angle = count == 1 ? 0f : -spread * 0.5f + spread * i / (count - 1);
+            Vector2 shotDirection = Quaternion.Euler(0, 0, angle) * direction;
+            FireProjectile(shotDirection, target, spawnPosition);
         }
+        if (_projectileData.castSFX != null)
+            AudioSource.PlayClipAtPoint(_projectileData.castSFX, spawnPosition);
+        return true;
     }
 
-
-    // no FireProjectile, aplica os modificadores
-    void FireProjectile(Vector2 direction, ITargetable target)
+    private void FireProjectile(Vector2 direction, Character target, Vector3 spawnPosition)
     {
-        if (_projectileData?.prefab == null) return;
-
-        GameObject obj = Instantiate(
-            _projectileData.prefab,
-            _character.CombatPoint.position,
-            Quaternion.identity);
-
-        Projectile projectile = obj.GetComponent<Projectile>();
-        if (projectile == null) return;
-
-        // behavior final com upgrades
+        var obj = Instantiate(_projectileData.prefab, spawnPosition, Quaternion.identity);
+        var projectile = obj.GetComponent<Projectile>();
+        if (projectile == null) { Destroy(obj); return; }
+        var source = _character.SpriteRenderer;
+        if (source != null)
+            foreach (var renderer in obj.GetComponentsInChildren<SpriteRenderer>())
+            {
+                renderer.sortingLayerID = source.sortingLayerID;
+                renderer.sortingOrder = source.sortingOrder + 1;
+            }
         ProjectileBehavior behavior = _projectileData.behavior;
-        if (_piercing)     behavior = ProjectileBehavior.Piercing;
+        if (_homingEnabled) behavior = ProjectileBehavior.Homing;
+        if (_piercing) behavior = ProjectileBehavior.Piercing;
         if (_bounceEnabled) behavior = ProjectileBehavior.Bounce;
-
-        // cria uma cópia dos dados com modificadores aplicados
-        // sem modificar o ScriptableObject original
-        projectile.Initialize(
-            direction,
-            gameObject,
-            _projectileData,
-            behavior,
-            _damageBonus,
-            _speedBonus,
-            _bounceBonus,
-            _projectileData.behavior == ProjectileBehavior.Homing ? target : null);
+        if (behavior == ProjectileBehavior.ArcShot)
+        {
+            projectile.InitializeArc(target.CombatPoint.position, 1f, gameObject, _projectileData);
+            return;
+        }
+        projectile.Initialize(direction, gameObject, _projectileData, behavior,
+            _damageBonus + _character.Stats.attackPower, _speedBonus, _bounceBonus,
+            behavior == ProjectileBehavior.Homing ? target : null);
     }
 
-    ITargetable FindTarget()
+    private bool IsEnemy(Character target)
     {
-        bool isMonster = GetComponent<Monster>() != null;
-
-        if (isMonster)
-        {
-            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude);
-            Hero closest  = null;
-            float minDist = float.MaxValue;
-
-            foreach (Hero h in heroes)
-            {
-                if (!h.IsAlive) continue;
-                float dist = Vector2.Distance(
-                    _character.CombatPoint.position, h.transform.position);
-                if (dist < minDist) { minDist = dist; closest = h; }
-            }
-            return closest;
-        }
-        else
-        {
-            Monster[] monsters = FindObjectsByType<Monster>(FindObjectsInactive.Exclude);
-            Monster closest    = null;
-            float minDist      = float.MaxValue;
-
-            foreach (Monster m in monsters)
-            {
-                if (!m.IsAlive) continue;
-                float dist = Vector2.Distance(
-                    _character.CombatPoint.position, m.transform.position);
-                if (dist < minDist) { minDist = dist; closest = m; }
-            }
-            return closest;
-        }
+        return target != null && target.IsAlive &&
+            ((_character is Monster && target is Hero) || (_character is Hero && target is Monster));
     }
 
-    Vector2 RotateVector(Vector2 v, float degrees)
+    private Character FindTarget()
     {
-        float rad = degrees * Mathf.Deg2Rad;
-        float cos = Mathf.Cos(rad);
-        float sin = Mathf.Sin(rad);
-        return new Vector2(v.x * cos - v.y * sin, v.x * sin + v.y * cos);
+        Character closest = null;
+        float distance = float.MaxValue;
+        foreach (var target in FindObjectsByType<Character>(FindObjectsInactive.Exclude))
+        {
+            if (!IsEnemy(target)) continue;
+            float d = Vector2.Distance(_character.CombatPoint.position, target.CombatPoint.position);
+            if (d < distance) { closest = target; distance = d; }
+        }
+        return closest;
     }
 }

@@ -18,6 +18,19 @@ namespace DungeonKeeper
         // ── PROPRIEDADES DE DADOS ─────────────────────────
         public MonsterData Data { get; private set; }
         public MonsterProgression Progression { get; private set; }
+        public AttackSpecialization BirthAttack => Progression?.GetBirthAttack(Data);
+        public AttackType EffectiveAttackType => Progression != null && Progression.birthAttackRolled
+            ? Progression.birthAttackType : (Data != null ? Data.attackType : AttackType.Melee);
+        public MeleeSkillData ActiveMeleeData => BirthAttack != null ? BirthAttack.meleeData : Data?.meleeData;
+        public ProjectileData ActiveProjectileData => BirthAttack != null ? BirthAttack.projectileData : Data?.projectileData;
+
+        public Stats GetCombatStatsForLevel(int level)
+        {
+            Progression?.EnsureBirthAttack(Data);
+            var stats = Data.GetStatsForLevel(level);
+            if (BirthAttack != null) stats.attackRange = BirthAttack.attackRange;
+            return stats;
+        }
         public Vector3 GuardPosition { get; private set; }
 
         [Header("Qualidade & Raridade")]
@@ -84,7 +97,7 @@ namespace DungeonKeeper
             }
 
             // Aplica os atributos base calculados para o nível mantido no Progression
-            base.Initialize(data.GetStatsForLevel(Progression.currentLevel));
+            base.Initialize(GetCombatStatsForLevel(Progression.currentLevel));
 
             // Configura componentes de ataque
             SetupAttackComponents(data);
@@ -112,7 +125,7 @@ namespace DungeonKeeper
 
             if (monsterData != null)
             {
-                base.Initialize(monsterData.GetStatsForLevel(CurrentLevel));
+                base.Initialize(GetCombatStatsForLevel(CurrentLevel));
             }
 
             if (_skillTree != null)
@@ -124,21 +137,24 @@ namespace DungeonKeeper
         private void SetupAttackComponents(MonsterData monsterData)
         {
             if (monsterData == null) return;
+            Progression?.EnsureBirthAttack(monsterData);
 
-            if (monsterData.attackType == AttackType.Ranged)
+            if (EffectiveAttackType == AttackType.Ranged)
             {
                 ProjectileSkill rangedSkill = gameObject.GetComponent<ProjectileSkill>();
                 if (rangedSkill == null) rangedSkill = gameObject.AddComponent<ProjectileSkill>();
+                rangedSkill.Initialize(ActiveProjectileData,
+                    1f / Mathf.Max(0.1f, monsterData.GetStatsForLevel(CurrentLevel).attackSpeed));
                 
                 MeleeSkill melee = GetComponent<MeleeSkill>();
                 if (melee != null) Destroy(melee);
             }
-            else if (monsterData.attackType == AttackType.Melee)
+            else if (EffectiveAttackType == AttackType.Melee)
             {
                 MeleeSkill meleeSkill = gameObject.GetComponent<MeleeSkill>();
                 if (meleeSkill == null) meleeSkill = gameObject.AddComponent<MeleeSkill>();
                 
-                meleeSkill.Initialize(monsterData.meleeData);
+                meleeSkill.Initialize(ActiveMeleeData);
 
                 ProjectileSkill ranged = GetComponent<ProjectileSkill>();
                 if (ranged != null) Destroy(ranged);
@@ -166,7 +182,7 @@ namespace DungeonKeeper
 
                 if (Data != null)
                 {
-                    base.Initialize(Data.GetStatsForLevel(CurrentLevel));
+                    base.Initialize(GetCombatStatsForLevel(CurrentLevel));
                 }
 
                 OnLevelUp?.Invoke(CurrentLevel);
@@ -249,6 +265,22 @@ namespace DungeonKeeper
             transform.position = newPosition;
         }
 
+        public override void Attack(IDamageable target)
+        {
+            if (!IsAlive || target == null) return;
+            if (Data != null && EffectiveAttackType == AttackType.Ranged)
+            {
+                if (GetComponent<ProjectileSkill>()?.TryFire(target as Character) == true) OnAttack();
+                return;
+            }
+            if (Data != null && EffectiveAttackType == AttackType.Melee && ActiveMeleeData != null)
+            {
+                if (GetComponent<MeleeSkill>()?.TryAttack(target as Character) == true) OnAttack();
+                return;
+            }
+            base.Attack(target);
+        }
+
         protected override void OnAttack()
         {
             if (Animator == null) return;
@@ -311,7 +343,7 @@ namespace DungeonKeeper
             Progression = instance.progression;
             quality = instance.quality;
 
-            base.Initialize(Data.GetStatsForLevel(Progression.currentLevel));
+            base.Initialize(GetCombatStatsForLevel(Progression.currentLevel));
             SetupAttackComponents(Data);
 
             if (_skillTree != null)

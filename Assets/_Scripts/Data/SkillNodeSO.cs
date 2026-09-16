@@ -2,6 +2,8 @@ using UnityEngine;
 
 namespace DungeonKeeper
 {
+    public enum AttackCompatibility { Any, Melee, Ranged }
+
     public enum SkillType
     {
 // 🛡️ Status Base
@@ -74,6 +76,14 @@ namespace DungeonKeeper
         [Header("Efeito nos Status")]
         public SkillType skillType;
         public float modifierValue; // Ex: 10 para +10 HP ou 0.15 para +15%[cite: 14]
+
+        [Header("Melhoria da habilidade de nascimento")]
+        public AttackCompatibility attackCompatibility;
+        public SkillUpgrade projectileUpgrade;
+        public int meleeDamageBonus;
+        public float meleeRangeBonus;
+        public int meleeCleaveBonus;
+        public float meleeCooldownReduction;
 
         [Header("Regras de Escolha")]
         public SkillNodeSO mutuallyExclusiveSkill; // O nó oposto na mesma linha (ex: Node B)[cite: 14]

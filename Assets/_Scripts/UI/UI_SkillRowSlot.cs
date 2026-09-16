@@ -51,6 +51,12 @@ namespace DungeonKeeper
         {
             _leftNode = leftNode;
             _rightNode = rightNode;
+            if (leftNode != null && rightNode == null && leftNode.requiredMonsterLevel == 1)
+            {
+                foreach (var layout in GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true)) layout.enabled = false;
+                PlaceReadable(_leftSlot, .5f, 112, 112);
+                PlaceReadable(_levelText, .18f, 180, 80);
+            }
             if (_leftSlot != null) _leftSlot.gameObject.SetActive(leftNode != null);
             if (_rightSlot != null) _rightSlot.gameObject.SetActive(rightNode != null);
 

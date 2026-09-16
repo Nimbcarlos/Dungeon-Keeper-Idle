@@ -9,7 +9,8 @@ public enum DamageType
     Poison,
     Lightning,
     Holy,
-    Dark
+    Dark,
+    Water
 }
 
 public enum SkillTargetType

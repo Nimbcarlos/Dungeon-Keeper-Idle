@@ -65,11 +65,9 @@ namespace DungeonKeeper
 
             if (Data == null)
             {
-                Debug.LogError($"[Hero] {gameObject.name} morreu, mas o 'Data' (HeroData) está NULL! As recompensas não foram entregues.");
                 return;
             }
 
-            Debug.Log($"Herói '{name}' morreu. Recompensa: {Data.goldReward} Gold, {Data.essenceReward} Essência, {Data._xpReward} XP");
 
             Treasure treasure = FindAnyObjectByType<Treasure>();
             if (treasure != null) treasure.AddGold(Data.goldReward);
@@ -119,7 +117,6 @@ namespace DungeonKeeper
         {
             if (Animator != null)
             {
-                Debug.Log("Herói comemorando vitória!");
                 SetState((int)CharacterState.Stand);
                 Animator.SetBool(Victory, true);
             }
@@ -132,7 +129,6 @@ namespace DungeonKeeper
 
         private IEnumerator VictoryRoutine(float duration)
         {
-            Debug.Log($"Herói comemorando por {duration} segundos antes de desaparecer.");
             yield return new WaitForSeconds(duration);
             Destroy(gameObject);
         }

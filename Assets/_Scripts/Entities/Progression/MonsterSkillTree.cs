@@ -63,20 +63,7 @@ namespace DungeonKeeper
 
         public int GetRequiredLevel(SkillNodeSO node)
         {
-            int index = _availableNodes.IndexOf(node);
-            if (node == null || index < 0) return int.MaxValue;
-            int level = 1;
-            for (int row = 0; row <= index / 2; row++)
-            {
-                level++;
-                for (int side = 0; side < 2; side++)
-                {
-                    int slot = row * 2 + side;
-                    if (slot < _availableNodes.Count && _availableNodes[slot] != null)
-                        level = Mathf.Max(level, _availableNodes[slot].requiredMonsterLevel);
-                }
-            }
-            return level;
+            return node != null && _availableNodes.Contains(node) ? node.requiredMonsterLevel : int.MaxValue;
         }
 
         public bool CanUnlockNodeInRow(SkillNodeSO clickedNode, SkillNodeSO oppositeNodeInRow)
@@ -120,7 +107,7 @@ namespace DungeonKeeper
         {
             if (_monster == null || _data == null || _progression == null) return;
             // Rebuild from base values: re-opening the UI must not add bonuses again.
-            Stats baseline = _data.GetStatsForLevel(_progression.currentLevel);
+            Stats baseline = _monster.GetCombatStatsForLevel(_progression.currentLevel);
             var stats = _monster.Stats;
             if (stats == null) return;
             stats.attackPower = Mathf.RoundToInt(baseline.attackPower * (1 + GetTotalModifier(SkillType.PercentDamage) / 100f)
@@ -129,8 +116,10 @@ namespace DungeonKeeper
                 + GetTotalModifier(SkillType.FlatHealth)));
             stats.attackSpeed = baseline.attackSpeed + GetTotalModifier(SkillType.AttackSpeed);
             stats.moveSpeed = baseline.moveSpeed + GetTotalModifier(SkillType.MovementSpeed);
+            stats.attackRange = baseline.attackRange;
             if (_monster.Health != null) _monster.Health.ModifyMaxHealth(stats.maxHP - _monster.Health.MaxHP);
             GetComponent<MeleeSkill>()?.ResetTalentUpgrades();
+            GetComponent<ProjectileSkill>()?.ResetTalentUpgrades();
 
             foreach (string skillID in _progression.unlockedSkillIDs)
             {
@@ -158,15 +147,18 @@ namespace DungeonKeeper
 
         private void ApplyCombatSkillUpgrade(SkillNodeSO node)
         {
-            MeleeSkill melee = GetComponent<MeleeSkill>();
-            if (melee != null)
+            if (!_progression.SupportsNode(node)) return;
+            if (_monster.EffectiveAttackType == AttackType.Ranged)
             {
-                melee.ApplyUpgradeBonus(
-                    extraDamage: Mathf.RoundToInt(node.modifierValue), 
-                    extraRange: 0f, 
-                    extraCleave: 0, 
-                    cdr: 0f
-                );
+                var ranged = GetComponent<ProjectileSkill>();
+                if (ranged != null && node.projectileUpgrade != null) ranged.ApplyUpgrade(node.projectileUpgrade);
+            }
+            else
+            {
+                _monster.Stats.attackRange += node.meleeRangeBonus;
+                GetComponent<MeleeSkill>()?.ApplyUpgradeBonus(
+                    node.meleeDamageBonus + Mathf.RoundToInt(node.modifierValue),
+                    node.meleeRangeBonus, node.meleeCleaveBonus, node.meleeCooldownReduction);
             }
         }
 

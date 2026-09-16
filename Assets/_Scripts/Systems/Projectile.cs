@@ -26,8 +26,8 @@ namespace DungeonKeeper
         private Transform  _visualTransform;
 
         // Propriedades simplificadas
-        private float Speed => _data != null ? _data.speed : 8f;
-        private int   Damage => _data != null ? _data.damage : 10;
+        private float Speed => _initialized ? _speedOverride : (_data != null ? _data.speed : 8f);
+        private int   Damage => _initialized ? _damageOverride : (_data != null ? _data.damage : 10);
         private float Lifetime => _data != null ? _data.lifetime : 5f;
         private float VisualOffset => _data != null ? _data.visualRotationOffset : 0f;
 
@@ -43,7 +43,10 @@ namespace DungeonKeeper
         private int   _damageOverride;
         private float _speedOverride;
         private int   _bounceOverride;
-        private int   _bounceBonus;
+        private bool _initialized;
+        private bool _spent;
+        private readonly System.Collections.Generic.HashSet<Character> _hitCharacters =
+            new System.Collections.Generic.HashSet<Character>();
 
         public void Initialize(Vector2 direction, GameObject owner,
                             ProjectileData data,
@@ -54,6 +57,12 @@ namespace DungeonKeeper
                             ITargetable homingTarget = null)
         {
             if (data != null) _data = data;
+            if (_data == null) { FinishProjectile(); return; }
+            _initialized = true;
+            _spent = false;
+            _isArcing = false;
+            _bounceCount = 0;
+            _hitCharacters.Clear();
 
             _direction    = direction.normalized;
             _owner        = owner;
@@ -63,13 +72,13 @@ namespace DungeonKeeper
             _behaviorOverride = behaviorOverride;
 
             // aplica bônus sem modificar o ScriptableObject
-            _damageOverride = data.damage + damageBonus;
-            _speedOverride  = data.speed  + speedBonus;
-            _bounceOverride = data.maxBounce + bounceBonus;
+            _damageOverride = Mathf.Max(0, _data.damage + damageBonus);
+            _speedOverride  = Mathf.Max(0f, _data.speed + speedBonus);
+            _bounceOverride = Mathf.Max(1, _data.maxBounce + bounceBonus);
 
             SetupVisuals();
             UpdateVisualOrientation();
-            Destroy(gameObject, data.lifetime);
+            Destroy(gameObject, Mathf.Max(0.01f, _data.lifetime));
         }
 
         // Inicialização específica para ArcShot
@@ -94,6 +103,8 @@ namespace DungeonKeeper
         private void SetupVisuals()
         {
             if (_data == null) return;
+            if (_visualTransform != null)
+                _visualTransform.localScale = new Vector3(_data.scale.x, _data.scale.y, 1f);
 
             if (_sr != null)
             {
@@ -123,13 +134,14 @@ namespace DungeonKeeper
 
         void Update()
         {
+            if (_spent) return;
             if (_isArcing)
             {
                 MoveArc();
                 return;
             }
 
-            ProjectileBehavior currentBehavior = _data != null ? _data.behavior : ProjectileBehavior.Straight;
+            ProjectileBehavior currentBehavior = _initialized ? _behaviorOverride : (_data != null ? _data.behavior : ProjectileBehavior.Straight);
 
             switch (currentBehavior)
             {
@@ -215,60 +227,49 @@ namespace DungeonKeeper
 
         void OnTriggerEnter2D(Collider2D other)
         {
-            // Debug.Log($"Projétil colidiu com: {other.name} | Layer: {LayerMask.LayerToName(other.gameObject.layer)}");
-
-            if (other.gameObject == _owner) return;
-
-            bool isWall   = other.gameObject.layer == LayerMask.NameToLayer("Wall");
-            bool isTarget = other.GetComponent<IDamageable>() != null;
-
-            if (!isWall && !isTarget) return;
-
-            ProjectileBehavior currentBehavior = _data != null
-                ? _data.behavior : ProjectileBehavior.Straight;
-
-            // aplica dano se não for parede
-            if (isTarget && !isWall)
+            if (_spent || other == null) return;
+            if (_owner != null && (other.gameObject == _owner || other.transform.IsChildOf(_owner.transform))) return;
+            bool isWall = other.gameObject.layer == LayerMask.NameToLayer("Wall");
+            var targetCharacter = other.GetComponentInParent<Character>();
+            var ownerCharacter = _owner != null ? _owner.GetComponent<Character>() : null;
+            if (targetCharacter != null)
             {
-                IDamageable target = other.GetComponent<IDamageable>();
-                var monsterOwner = _owner != null ? _owner.GetComponent<Monster>() : null;
-                target.TakeDamage(monsterOwner != null ? monsterOwner.RollAttackDamage(Damage) : Damage);
-                // Debug.Log($"Projétil acertou {other.name} por {Damage} de dano.");
-
-                if (_data != null && _data.impactVFX != null)
-                    Instantiate(_data.impactVFX, transform.position, Quaternion.identity);
+                if (!targetCharacter.IsAlive || targetCharacter == ownerCharacter ||
+                    (ownerCharacter is Monster && targetCharacter is Monster) ||
+                    (ownerCharacter is Hero && targetCharacter is Hero)) return;
+                if (!_hitCharacters.Add(targetCharacter)) return;
             }
-
-            switch (currentBehavior)
+            IDamageable target = targetCharacter != null ? (IDamageable)targetCharacter : other.GetComponentInParent<IDamageable>();
+            if (!isWall && target == null) return;
+            if (!isWall)
             {
-                case ProjectileBehavior.Piercing:
-                    // não destrói — continua atravessando, nunca reflete
-                    break;
-
-                case ProjectileBehavior.Bounce:
-                    _bounceCount++;
-                    int maxBounce = _data != null ? _data.maxBounce + _bounceBonus : 2;
-
-                    if (_bounceCount >= maxBounce)
-                    {
-                        Destroy(gameObject);
-                        return;
-                    }
-                    // Debug.Log($"Projétil ricocheteou! ({_bounceCount}/{maxBounce})");
-                    // calcula normal da superfície atingida
-                    Vector2 normal = GetCollisionNormal(other);
-                    _direction = Vector2.Reflect(_direction, normal).normalized;
-                    UpdateVisualOrientation();
-
-                    // busca próximo alvo na direção refletida
-                    // (o projétil vai naturalmente na nova direção)
-                    break;
-
-                default:
-                    if (_data == null || _data.destroyOnHit)
-                        Destroy(gameObject);
-                    break;
+                var monster = ownerCharacter as Monster;
+                if (monster != null && targetCharacter != null) monster.OnHitTarget(targetCharacter, Damage);
+                else target.TakeDamage(Damage);
             }
+            if (_data != null && _data.impactVFX != null)
+                Instantiate(_data.impactVFX, transform.position, Quaternion.identity);
+            if (_data != null && _data.hitSFX != null)
+                AudioSource.PlayClipAtPoint(_data.hitSFX, transform.position);
+            var behavior = _initialized ? _behaviorOverride : (_data != null ? _data.behavior : ProjectileBehavior.Straight);
+            if (behavior == ProjectileBehavior.Bounce)
+            {
+                _bounceCount++;
+                int limit = _initialized ? _bounceOverride : (_data != null ? _data.maxBounce : 1);
+                if (_bounceCount >= limit) { FinishProjectile(); return; }
+                _direction = Vector2.Reflect(_direction, GetCollisionNormal(other)).normalized;
+                UpdateVisualOrientation();
+            }
+            else if (isWall || (behavior != ProjectileBehavior.Piercing && (_data == null || _data.destroyOnHit)))
+                FinishProjectile();
+        }
+
+        private void FinishProjectile()
+        {
+            if (_spent) return;
+            _spent = true;
+            foreach (var collider in GetComponentsInChildren<Collider2D>()) collider.enabled = false;
+            Destroy(gameObject);
         }
 
         Vector2 GetCollisionNormal(Collider2D other)

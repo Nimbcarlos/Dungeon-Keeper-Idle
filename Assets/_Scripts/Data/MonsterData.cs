@@ -50,6 +50,9 @@ namespace DungeonKeeper
         [Header("Tipo de Ataque")]
         public AttackType attackType = AttackType.Melee;
 
+        [Header("Especializações possíveis no nascimento")]
+        public List<AttackSpecialization> birthAttacks = new List<AttackSpecialization>();
+
         [Header("Configurações de Ataque (SOs)")]
         public ProjectileData projectileData;
         public MeleeSkillData meleeData;
