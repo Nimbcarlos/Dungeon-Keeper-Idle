@@ -14,10 +14,9 @@ namespace DungeonKeeper
         private bool    _isAttacking;
         private Monster _monster;
 
-        private const float Y_THRESHOLD = 0.12f;
-        private bool IsRanged => _monster != null && _monster.EffectiveAttackType == AttackType.Ranged;
+        private const float Y_THRESHOLD = 0.5f;
 
-        private Vector2 MyFeetPos => character.FeetPoint != null ? (Vector2)character.FeetPoint.position : (Vector2)transform.position;
+        private bool IsRanged => _monster != null && _monster.EffectiveAttackType == AttackType.Ranged;
 
         protected override void Awake()
         {
@@ -29,7 +28,8 @@ namespace DungeonKeeper
         {
             if (_isAttacking || _monster == null || !_monster.IsAlive) return;
 
-            Hero closest = FindClosestHero();
+            // 🎯 O radar agora se baseia no novo tipo genérico!
+            Hero closest = FindClosestHeroInSight();
 
             switch (_state)
             {
@@ -39,10 +39,6 @@ namespace DungeonKeeper
                 case BrainState.Returning: HandleReturning(closest); break;
             }
         }
-
-        // ─────────────────────────────────────────────────────────────────
-        // ⚙️ MÁQUINA DE ESTADOS (APENAS DECISÃO)
-        // ─────────────────────────────────────────────────────────────────
 
         private void HandleIdle(Hero closest)
         {
@@ -72,7 +68,6 @@ namespace DungeonKeeper
 
             if (IsRanged)
             {
-                // Ranged guards its post instead of chasing a detected hero.
                 SetState(BrainState.Returning);
                 HandleReturning(closest);
                 return;
@@ -102,7 +97,6 @@ namespace DungeonKeeper
                 return;
             }
 
-            // No combate: fica cravado no chão e apenas olha para o herói
             ExecuteMovement(Vector2.zero, targetFeetPos.x - MyFeetPos.x);
 
             _attackTimer -= Time.deltaTime;
@@ -111,11 +105,13 @@ namespace DungeonKeeper
                 var melee = GetComponent<MeleeSkill>();
                 _attackTimer = _monster.Data != null && _monster.EffectiveAttackType == AttackType.Melee && _monster.ActiveMeleeData != null && melee != null
                     ? melee.AttackInterval : 1f / Mathf.Max(0.1f, character.Stats.attackSpeed);
+                
                 if (_monster.Data != null && _monster.EffectiveAttackType == AttackType.Ranged)
                 {
                     var ranged = GetComponent<ProjectileSkill>();
                     if (ranged != null) _attackTimer = ranged.AttackInterval;
                 }
+                
                 StartCoroutine(AttackRoutine(closest));
             }
         }
@@ -134,7 +130,7 @@ namespace DungeonKeeper
             if (Vector2.Distance((Vector2)transform.position, slotPos) <= 0.05f)
             {
                 transform.position = slotPos;
-                ExecuteMovement(Vector2.zero, 1f); // Olha para a direita ao chegar
+                ExecuteMovement(Vector2.zero, 1f);
                 SetState(BrainState.Idle);
                 return;
             }
@@ -145,54 +141,9 @@ namespace DungeonKeeper
             ExecuteMovement(moveDir, lookDir);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // 🚀 EXECUÇÃO CENTRALIZADA DE MOVIMENTO E VISUAL (CÉREBRO)
-        // ─────────────────────────────────────────────────────────────────
-
         public void SetState(BrainState newState)
         {
             _state = newState;
-        }
-
-        /// <summary>
-        /// PONTO ÚNICO DE SAÍDA: Gerencia Move, Flip/Scale e Animação de Movimento
-        /// </summary>
-        private void ExecuteMovement(Vector2 moveDirection, float lookDirectionX)
-        {
-            ApplyVisualFlip(lookDirectionX);
-
-            if (moveDirection == Vector2.zero)
-            {
-                character.Animator?.SetBool("isMoving", false);
-                character.Move(Vector2.zero);
-                return;
-            }
-
-            character.Animator?.SetBool("isMoving", true);
-            character.Move(moveDirection);
-        }
-
-        private Vector2 CalculateTwoPhaseMovement(Vector2 currentPos, Vector2 targetPos)
-        {
-            float deltaY = targetPos.y - currentPos.y;
-            float deltaX = targetPos.x - currentPos.x;
-
-            if (Mathf.Abs(deltaY) > Y_THRESHOLD)
-                return new Vector2(0f, Mathf.Sign(deltaY));
-
-            if (Mathf.Abs(deltaX) > 0.05f)
-                return new Vector2(Mathf.Sign(deltaX), 0f);
-
-            return Vector2.zero;
-        }
-
-        private void ApplyVisualFlip(float directionX)
-        {
-            if (Mathf.Abs(directionX) < 0.01f) return;
-
-            Vector3 scale = transform.localScale;
-            scale.x = Mathf.Sign(directionX) * Mathf.Abs(scale.x);
-            transform.localScale = scale;
         }
 
         private void StopAttack()
@@ -201,10 +152,6 @@ namespace DungeonKeeper
             _isAttacking = false;
             _attackTimer = 0f;
         }
-
-        // ─────────────────────────────────────────────────────────────────
-        // 📏 CHECAGENS DE ALCANCE E PIVÔS
-        // ─────────────────────────────────────────────────────────────────
 
         private bool IsInDetectionRange(Hero hero)
         {
@@ -215,9 +162,9 @@ namespace DungeonKeeper
         private bool IsTargetInAttackRange(Character target)
         {
             if (target == null) return false;
+            
             if (IsRanged)
             {
-                // Match ProjectileSkill.TryFire, including shots across lanes.
                 Vector2 delta = target.CombatPoint.position - character.CombatPoint.position;
                 return delta.sqrMagnitude <= character.Stats.attackRange * character.Stats.attackRange;
             }
@@ -228,19 +175,25 @@ namespace DungeonKeeper
             return diffX <= character.Stats.attackRange && diffY <= Y_THRESHOLD;
         }
 
-        private Hero FindClosestHero()
+        private Hero FindClosestHeroInSight()
         {
-            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude);
-            Hero closest  = null;
+            // 🎯 Filtro Otimizado usando o radar e a herança
+            Hero[] aliveHeroes = GetAliveEntities<Hero>();
+            
+            Hero closest = null;
             float minDist = float.MaxValue;
 
-            foreach (Hero h in heroes)
+            foreach (Hero h in aliveHeroes)
             {
-                if (h == null || !h.IsAlive) continue;
-                float dist = IsRanged
-                    ? Vector2.Distance(character.CombatPoint.position, h.CombatPoint.position)
+                float dist = IsRanged 
+                    ? Vector2.Distance(character.CombatPoint.position, h.CombatPoint.position) 
                     : Vector2.Distance(MyFeetPos, GetEntityFeetPos(h));
-                if (dist < minDist) { minDist = dist; closest = h; }
+
+                if (dist <= character.Stats.detectionRange && dist < minDist)
+                {
+                    minDist = dist;
+                    closest = h;
+                }
             }
             return closest;
         }
@@ -261,11 +214,6 @@ namespace DungeonKeeper
 
             yield return new WaitForSeconds(recoveryTime);
             _isAttacking = false;
-        }
-
-        private Vector2 GetEntityFeetPos(Character entity)
-        {
-            return entity.FeetPoint != null ? (Vector2)entity.FeetPoint.position : (Vector2)entity.transform.position;
         }
 
         private void OnDrawGizmosSelected()

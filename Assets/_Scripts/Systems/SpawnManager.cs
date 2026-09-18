@@ -85,22 +85,24 @@ namespace DungeonKeeper
             // No momento do Spawn do Herói:
             GameObject obj = Instantiate(data.prefab, _heroSpawn.position, Quaternion.identity);
 
-            // Pega o componente e sorteia o visual na hora!
-            HeroRandomizer randomizer = obj.GetComponent<HeroRandomizer>();
-            if (randomizer != null)
-            {
-                randomizer.RandomizeEquipment();
-            }
-
             Hero hero = obj.GetComponent<Hero>();
             if (hero != null)
             {
+                // 🎯 1. INJETA OS DADOS PRIMEIRO! O herói agora sabe se é Melee ou Ranged.
                 hero.Initialize(data);
+                
                 if (hero.Health != null)
                 {
                     hero.Health.OnDeath += () => OnHeroDied(hero);
                 }
                 _currentParty.Add(hero);
+            }
+
+            // 🎯 2. SORTEIA O VISUAL DEPOIS! O Randomizer agora consegue ler o HeroData corretamente.
+            HeroRandomizer randomizer = obj.GetComponent<HeroRandomizer>();
+            if (randomizer != null)
+            {
+                randomizer.RandomizeEquipment();
             }
         }
 

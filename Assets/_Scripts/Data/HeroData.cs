@@ -2,6 +2,14 @@ using UnityEngine;
 
 namespace DungeonKeeper
 {
+    public enum HeroAttackType
+    {
+        Melee,
+        Ranged,
+        Mage,   // Preparando para o futuro
+        Healer  // Preparando para o futuro
+    }
+
     [CreateAssetMenu(fileName = "HeroData", menuName = "Dungeon/Hero Data")]
     public class HeroData : ScriptableObject
     {
@@ -10,6 +18,9 @@ namespace DungeonKeeper
         public string displayName;
         public Sprite portrait;
         public GameObject prefab;
+
+        [Header("Combat")]
+        public HeroAttackType attackType = HeroAttackType.Melee;
 
         [Header("Stats")]
         public Stats stats;
@@ -21,6 +32,6 @@ namespace DungeonKeeper
         [Header("Loot ao morrer")]
         public int goldReward    = 10;
         public int essenceReward = 2;
-        public int _xpReward = 10; // Valor fixo concedido ao morrer
+        public int _xpReward = 10;
     }
 }

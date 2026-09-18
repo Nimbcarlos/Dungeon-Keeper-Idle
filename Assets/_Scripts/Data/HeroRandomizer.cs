@@ -35,10 +35,12 @@ namespace DungeonKeeper
         };
 
         private HeroEditorCharacter _heroEditorCharacter;
+        private Hero _hero; // 🎯 Referência para ler os dados do herói
 
         private void Awake()
         {
             _heroEditorCharacter = GetComponent<HeroEditorCharacter>();
+            _hero = GetComponent<Hero>(); // Busca o componente Hero na inicialização
         }
 
         public void RandomizeEquipment()
@@ -72,26 +74,51 @@ namespace DungeonKeeper
                 if (randomHair != null) _heroEditorCharacter.Hair = randomHair.Sprite;
             }
 
-            // 4. Arma Principal
-            if (_spriteCollection.MeleeWeapon1H != null && _spriteCollection.MeleeWeapon1H.Count > 0)
-            {
-                var randomWeapon = GetRandom(_spriteCollection.MeleeWeapon1H);
-                if (randomWeapon != null) _heroEditorCharacter.PrimaryMeleeWeapon = randomWeapon.Sprite;
-            }
+            // 🎯 4. LÓGICA DE ARMA: MELEE vs RANGED
+            bool isRanged = _hero != null && _hero.Data != null && _hero.Data.attackType == HeroAttackType.Ranged;
+            Debug.Log($"Tipo de ataque do herói: {(isRanged ? "À distância" : "Corpo a corpo")}");
 
-            // 5. Escudo (50% de chance)
-            if (_spriteCollection.Shield != null && _spriteCollection.Shield.Count > 0 && Random.value > 0.5f)
+            if (isRanged)
             {
-                _heroEditorCharacter.WeaponType = HeroEditor.Common.Enums.WeaponType.Melee1H;
-                var randomShield = GetRandom(_spriteCollection.Shield);
-                if (randomShield != null) _heroEditorCharacter.Shield = randomShield.Sprite;
+                // Configura para atirador (Arco)
+                _heroEditorCharacter.WeaponType = HeroEditor.Common.Enums.WeaponType.Bow;
+                _heroEditorCharacter.Shield = null;             // Limpa o escudo
+                _heroEditorCharacter.PrimaryMeleeWeapon = null; // Limpa a espada
+
+                if (_spriteCollection.Bow != null && _spriteCollection.Bow.Count > 0)
+                {
+                    var randomBow = GetRandom(_spriteCollection.Bow);
+                    // O HeroEditor geralmente exige a lista de sprites (.Sprites) para o Arco
+                    if (randomBow != null) _heroEditorCharacter.Bow = randomBow.Sprites;
+                    Debug.Log($"Arco sorteado: {randomBow?.Name}");
+                }
             }
             else
             {
-                _heroEditorCharacter.Shield = null;
+                // Configura para corpo-a-corpo (Melee)
+                _heroEditorCharacter.WeaponType = HeroEditor.Common.Enums.WeaponType.Melee1H;
+                _heroEditorCharacter.Bow = null; // Limpa o arco
+
+                // Sorteia Arma Principal
+                if (_spriteCollection.MeleeWeapon1H != null && _spriteCollection.MeleeWeapon1H.Count > 0)
+                {
+                    var randomWeapon = GetRandom(_spriteCollection.MeleeWeapon1H);
+                    if (randomWeapon != null) _heroEditorCharacter.PrimaryMeleeWeapon = randomWeapon.Sprite;
+                }
+
+                // 5. Escudo (50% de chance apenas para Melee)
+                if (_spriteCollection.Shield != null && _spriteCollection.Shield.Count > 0 && Random.value > 0.5f)
+                {
+                    var randomShield = GetRandom(_spriteCollection.Shield);
+                    if (randomShield != null) _heroEditorCharacter.Shield = randomShield.Sprite;
+                }
+                else
+                {
+                    _heroEditorCharacter.Shield = null;
+                }
             }
 
-            // 🎯 6. Sorteia cores se a flag estiver ativa
+            // 6. Sorteia cores se a flag estiver ativa
             if (_randomizeColorsOnEquip)
             {
                 RandomizeColors();

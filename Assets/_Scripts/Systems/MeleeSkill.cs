@@ -106,7 +106,7 @@ namespace DungeonKeeper
                 int order = int.MinValue;
                 IncludeCharacterSorting(_character, ref layer, ref order);
                 IncludeCharacterSorting(target, ref layer, ref order);
-                Debug.Log($"MeleeSkill.PlayEffect: SortingLayerID={layer}, SortingOrder={order}");
+
                 foreach (var visual in effect.GetComponentsInChildren<SpriteRenderer>())
                 {
                     visual.sortingLayerID = layer;

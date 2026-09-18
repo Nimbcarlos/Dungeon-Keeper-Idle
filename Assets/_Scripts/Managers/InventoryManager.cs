@@ -8,6 +8,24 @@ namespace DungeonKeeper
     {
         public static InventoryManager Instance { get; private set; }
 
+        #if UNITY_EDITOR
+        [Header("Teste")]
+        [SerializeField] private MonsterData _testMonster;
+        [SerializeField] private MonsterQuality _testQuality = MonsterQuality.Common;
+
+        [ContextMenu("Debug/Add Selected Monster")]
+        private void DebugAddSelectedMonster()
+        {
+            if (_testMonster == null)
+            {
+                Debug.LogWarning("Selecione um MonsterData para teste.");
+                return;
+            }
+
+            AddMonsterInstance(new MonsterInstance(_testMonster.id, _testQuality));
+        }
+        #endif
+
         [Header("Banco de Dados")]
         [SerializeField] private MonsterDatabase _database;
 
